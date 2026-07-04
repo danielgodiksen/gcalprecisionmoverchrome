@@ -1,0 +1,167 @@
+/* GCal Precision Mover — injected UI */
+
+.gpm-selected {
+  outline: 2px solid #1a73e8 !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.25) !important;
+  border-radius: 4px;
+}
+
+.gpm-dragging {
+  opacity: 0.85;
+  z-index: 9999 !important;
+  cursor: ns-resize !important;
+  transition: none !important;
+}
+
+.gpm-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #202124;
+  color: #e8eaed;
+  font: 500 12px/1.4 Roboto, Arial, sans-serif;
+  letter-spacing: 0.2px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 80ms ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.gpm-tooltip--visible {
+  opacity: 1;
+}
+
+.gpm-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483646;
+  width: 232px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #3c4043;
+  font: 400 13px/1.45 Roboto, Arial, sans-serif;
+  box-shadow: 0 4px 18px rgba(60, 64, 67, 0.3), 0 1px 3px rgba(60, 64, 67, 0.15);
+  border: 1px solid #dadce0;
+}
+
+.gpm-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.gpm-panel__count {
+  font-weight: 500;
+  color: #202124;
+}
+
+.gpm-panel__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.gpm-panel__row--fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #5f6368;
+  flex: 1;
+}
+.gpm-panel__row--fields input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font: inherit;
+  color: #202124;
+}
+.gpm-panel__row--fields input:focus {
+  outline: 2px solid #1a73e8;
+  outline-offset: -1px;
+}
+
+.gpm-btn {
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #3c4043;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: 500 12px Roboto, Arial, sans-serif;
+  cursor: pointer;
+}
+.gpm-btn:hover {
+  background: #f1f3f4;
+}
+.gpm-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 1px;
+}
+.gpm-btn--primary {
+  flex: 1;
+  background: #1a73e8;
+  border-color: #1a73e8;
+  color: #fff;
+  padding: 6px 10px;
+}
+.gpm-btn--primary:hover {
+  background: #1765cc;
+}
+.gpm-btn--ghost {
+  border: none;
+  background: transparent;
+  color: #1a73e8;
+}
+.gpm-btn--ghost:hover {
+  background: #e8f0fe;
+}
+
+.gpm-panel__nudge {
+  justify-content: space-between;
+}
+.gpm-panel__nudge span {
+  font-size: 11px;
+  color: #5f6368;
+}
+
+.gpm-panel__hint {
+  font-size: 10.5px;
+  color: #80868b;
+  margin-bottom: 0;
+}
+
+.gpm-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 2147483647;
+  max-width: 60vw;
+  padding: 9px 16px;
+  border-radius: 8px;
+  background: #202124;
+  color: #e8eaed;
+  font: 400 13px/1.4 Roboto, Arial, sans-serif;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.gpm-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gpm-toast,
+  .gpm-tooltip {
+    transition: none;
+  }
+}
