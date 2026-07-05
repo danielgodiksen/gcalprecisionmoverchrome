@@ -165,3 +165,61 @@
     transition: none;
   }
 }
+
+/* --- Reminder dialog --- */
+.gpm-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  background: rgba(32, 33, 36, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gpm-dialog__box {
+  width: 360px;
+  max-height: 80vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  font: 400 13px/1.5 Roboto, Arial, sans-serif;
+  color: #3c4043;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.gpm-dialog__title { font-weight: 500; font-size: 15px; color: #202124; margin-bottom: 8px; }
+.gpm-dialog__label { font-size: 11.5px; color: #5f6368; margin: 10px 0 3px; }
+.gpm-dialog__box input[type="text"],
+.gpm-dialog__box input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font: inherit;
+}
+.gpm-dialog__check { display: block; margin: 12px 0 4px; font-size: 12.5px; }
+.gpm-dialog__check input { margin-right: 6px; }
+.gpm-dialog__row { display: flex; gap: 8px; margin-top: 14px; }
+.gpm-dialog__row .gpm-btn--primary { flex: 1; }
+.gpm-dialog__list { display: flex; flex-direction: column; gap: 6px; }
+.gpm-dialog__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+.gpm-dialog__item-name { font-weight: 500; color: #202124; flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpm-dialog__item-meta { flex: 1; font-size: 11px; color: #5f6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Edge-resize affordance + bubble button --- */
+.gpm-resizing { cursor: ns-resize !important; }
+[data-eventid]:hover { /* subtle hint that edges are grabbable with Alt */ }
+
+.gpm-bubble-btn {
+  display: block;
+  margin: 8px 16px 12px auto;
+  padding: 6px 12px;
+}

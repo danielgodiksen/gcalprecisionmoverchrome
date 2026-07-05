@@ -101,6 +101,8 @@ const observer = new MutationObserver(() => {
     clearTimeout(observer._t);
     observer._t = setTimeout(remarkSelection, 150);
   }
+  clearTimeout(observer._b);
+  observer._b = setTimeout(scanEventBubbles, 200);
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
@@ -141,6 +143,7 @@ function renderPanel() {
       </div>
       <div class="gpm-panel__row">
         <button class="gpm-btn gpm-btn--primary" data-act="apply">Shift selected</button>
+        <button class="gpm-btn" data-act="reminders" title="Notification reminders for selected events">🔔</button>
       </div>
       <div class="gpm-panel__row gpm-panel__nudge">
         <span>Nudge</span>
@@ -170,8 +173,164 @@ async function onPanelClick(e) {
     if (!delta) return toast("Enter a non-zero shift first.");
     return shiftSelected(delta);
   }
+  if (btn.dataset.act === "reminders") return openReminderDialog();
   if (btn.dataset.nudge) {
     return shiftSelected(parseInt(btn.dataset.nudge, 10));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reminder configuration dialog
+// ---------------------------------------------------------------------------
+
+let remDialog = null;
+let remTarget = null; // set when opened from an event bubble
+
+/** Inject a Reminders button into GCal's own event popup, so reminders are
+ *  added exactly where GCal's native notifications live. */
+function scanEventBubbles() {
+  document.querySelectorAll('div[role="dialog"]').forEach((dlg) => {
+    if (dlg.querySelector(".gpm-bubble-btn")) return;
+    const idEl = dlg.hasAttribute("data-eventid") ? dlg : dlg.querySelector("[data-eventid]");
+    if (!idEl) return;
+    const raw = idEl.getAttribute("data-eventid");
+    const ids = decodeEventId(raw);
+    if (!ids) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "gpm-btn gpm-bubble-btn";
+    btn.textContent = "🔔 Reminders";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openReminderDialog({ raw, eventId: ids.eventId, calendarId: ids.calendarId });
+    });
+    dlg.appendChild(btn);
+  });
+}
+
+async function openReminderDialog(target) {
+  remTarget = target || null;
+  if (remDialog) remDialog.remove();
+  remDialog = document.createElement("div");
+  remDialog.className = "gpm-dialog";
+  remDialog.innerHTML = `
+    <div class="gpm-dialog__box">
+      <div class="gpm-dialog__title">Reminders</div>
+      <div class="gpm-dialog__section">
+        <div class="gpm-dialog__label">Alert before start (minutes, comma-separated; 0 = at start)</div>
+        <input type="text" data-r="leads" value="5,0">
+        <div class="gpm-dialog__label">Focus ping every N minutes during the event (0 = off)</div>
+        <input type="number" data-r="focus" value="0" min="0" step="5">
+        <label class="gpm-dialog__check">
+          <input type="checkbox" data-r="fu"> Prompt me to schedule a follow-up when it ends
+          (re-notifies every 30 s until clicked)
+        </label>
+        <div class="gpm-dialog__label">Follow-up length (minutes)</div>
+        <input type="number" data-r="fumin" value="30" min="5" step="5">
+      </div>
+      <div class="gpm-dialog__row">
+        <button class="gpm-btn gpm-btn--primary" data-r="add"></button>
+        <button class="gpm-btn" data-r="test" title="Send a test notification with sound now">Test</button>
+        <button class="gpm-btn" data-r="close">Close</button>
+      </div>
+      <div class="gpm-dialog__title" style="margin-top:14px">Watched events</div>
+      <div class="gpm-dialog__list" data-r="list">Loading...</div>
+      <div class="gpm-panel__hint">Recurring events are watched as a series (every occurrence notifies).
+      Reminders fire while the browser is open (no Calendar tab needed).</div>
+    </div>`;
+  document.body.appendChild(remDialog);
+  remDialog.querySelector('[data-r="add"]').textContent = remTarget
+    ? "Watch this event"
+    : `Watch ${selection.size} selected event${selection.size === 1 ? "" : "s"}`;
+
+  remDialog.addEventListener("click", async (e) => {
+    if (e.target === remDialog) return closeReminderDialog();
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.r === "close") return closeReminderDialog();
+    if (btn.dataset.r === "test") {
+      try {
+        await bg({ type: "testNotification" });
+        toast("Test sent. No banner or chime? Check your OS notification settings for the browser (and Do Not Disturb / Focus Assist).", 9000);
+      } catch (err) {
+        toast(`Test failed: ${err.message}`, 8000);
+      }
+      return;
+    }
+    if (btn.dataset.r === "rm") {
+      await bg({ type: "removeWatch", key: btn.dataset.key });
+      return renderWatchList();
+    }
+    if (btn.dataset.r === "add") {
+      const q = (sel) => remDialog.querySelector(sel);
+      const config = {
+        leads: q('[data-r="leads"]').value.split(",").map((x) => parseInt(x.trim(), 10)).filter((n) => !isNaN(n) && n >= 0),
+        focusEvery: parseInt(q('[data-r="focus"]').value || "0", 10),
+        followUp: q('[data-r="fu"]').checked,
+        followUpMin: parseInt(q('[data-r="fumin"]').value || "30", 10),
+      };
+      if (!config.leads.length && !config.focusEvery && !config.followUp) {
+        return toast("Set at least one alert, focus ping, or follow-up.");
+      }
+      const targets = remTarget ? [remTarget] : [...selection.values()];
+      if (!targets.length) {
+        return toast("Open an event or Alt+click events first.");
+      }
+      btn.disabled = true;
+      let added = 0, skipped = 0;
+      for (const it of targets) {
+        try {
+          const res = await bg({ type: "addWatch", ...it, config });
+          if (res.skipped) skipped++; else added++;
+        } catch (err) {
+          toast(`Watch failed: ${err.message}`, 6000);
+        }
+      }
+      btn.disabled = false;
+      toast(`Watching ${added} event(s)${skipped ? `, ${skipped} skipped (all-day)` : ""}.`);
+      renderWatchList();
+    }
+  });
+
+  renderWatchList();
+}
+
+function closeReminderDialog() {
+  if (remDialog) remDialog.remove();
+  remDialog = null;
+}
+
+async function renderWatchList() {
+  if (!remDialog) return;
+  const list = remDialog.querySelector('[data-r="list"]');
+  try {
+    const { watches } = await bg({ type: "listWatches" });
+    if (!watches.length) {
+      list.textContent = "Nothing watched yet.";
+      return;
+    }
+    list.innerHTML = "";
+    for (const w of watches) {
+      const row = document.createElement("div");
+      row.className = "gpm-dialog__item";
+      const cfg = w.config || {};
+      const bits = [];
+      if (cfg.leads && cfg.leads.length) bits.push(`alerts: ${cfg.leads.join(", ")}m`);
+      if (cfg.focusEvery) bits.push(`focus: every ${cfg.focusEvery}m`);
+      if (cfg.followUp) bits.push(`follow-up: ${cfg.followUpMin}m`);
+      if (w.lastError) bits.push("⚠ " + String(w.lastError).slice(0, 60));
+      row.innerHTML = `<span class="gpm-dialog__item-name"></span>
+        <span class="gpm-dialog__item-meta"></span>
+        <button class="gpm-btn gpm-btn--ghost" data-r="rm">✕</button>`;
+      row.querySelector(".gpm-dialog__item-name").textContent =
+        w.summary + (w.isRecurring ? " (recurring)" : "");
+      row.querySelector(".gpm-dialog__item-meta").textContent = bits.join(" | ");
+      row.querySelector("button").dataset.key = w.key;
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.textContent = `Couldn't load watches: ${e.message}`;
   }
 }
 
@@ -180,15 +339,27 @@ async function shiftSelected(deltaMinutes) {
   if (busy) return;
   if (selection.size === 0) return;
   busy = true;
-  const items = [...selection.values()];
+  const items = [...selection.entries()];
   let done = 0;
   let skipped = 0;
   toast(`Shifting ${items.length} event(s) by ${deltaMinutes} min…`, 60000);
   try {
-    for (const it of items) {
+    for (const [raw, it] of items) {
       const res = await bg({ type: "shiftEvent", ...it, deltaMinutes });
       if (res.skipped) skipped++;
-      else done++;
+      else {
+        done++;
+        // Cache the exact API ids so the next shift skips resolution entirely
+        // (one GET + one PATCH instead of several lookups) — much faster nudging.
+        if (res.event && res.event.id) {
+          selection.set(raw, {
+            eventId: res.event.id,
+            calendarId: res.calendarId || it.calendarId,
+          });
+        }
+        // Move the chip immediately instead of waiting for Google's sync.
+        applyOptimisticShift(raw, deltaMinutes);
+      }
       toast(`Shifting… ${done + skipped}/${items.length}`, 60000);
     }
     toast(
@@ -200,6 +371,52 @@ async function shiftSelected(deltaMinutes) {
   } finally {
     busy = false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic UI: pin chips at their new position the instant the API confirms
+// a move, and release the override exactly when GCal repaints them (detected
+// by the old chip node leaving the DOM — moved events get re-rendered with a
+// fresh node). Google's own sync timing can't be forced; this hides it.
+// ---------------------------------------------------------------------------
+
+const pendingVisuals = new Set();
+
+function watchAndClear(items) {
+  // Accepts Elements or { el, height } records (height = original inline height
+  // to restore after a resize; GCal sets chip heights inline).
+  const list = [...items]
+    .filter(Boolean)
+    .map((x) => (x instanceof Element ? { el: x, height: null } : x));
+  if (list.length) pendingVisuals.add({ items: list, started: Date.now() });
+}
+
+setInterval(() => {
+  for (const entry of [...pendingVisuals]) {
+    const repainted = entry.items.some((it) => !it.el.isConnected);
+    if (repainted || Date.now() - entry.started > 30000) {
+      entry.items.forEach((it) => {
+        it.el.style.transform = "";
+        if (it.height !== null) it.el.style.height = it.height;
+      });
+      pendingVisuals.delete(entry);
+    }
+  }
+}, 250);
+
+/** Visually shift all chips of an event by deltaMin right away (sub-day only). */
+function applyOptimisticShift(raw, deltaMin) {
+  if (Math.abs(deltaMin) >= 1440) return; // day-sized jumps don't map to translateY
+  const els = [];
+  document
+    .querySelectorAll(`[data-eventid="${CSS.escape(raw)}"]`)
+    .forEach((el) => {
+      const ppm = pxPerMinuteFor(el);
+      if (!ppm) return; // month view / all-day row
+      el.style.transform = `translateY(${deltaMin * ppm}px)`;
+      els.push(el);
+    });
+  watchAndClear(els);
 }
 
 // ---------------------------------------------------------------------------
@@ -251,11 +468,26 @@ function collectGroupEls(chip, groupRaws) {
   return [...els];
 }
 
+/** Which part of the chip was grabbed: "start" (top edge), "end" (bottom edge), or "move". */
+function dragZone(chip, ev) {
+  const r = chip.el.getBoundingClientRect();
+  if (r.height >= 28) {
+    if (ev.clientY - r.top <= 8) return "start";
+    if (r.bottom - ev.clientY <= 8) return "end";
+  }
+  return "move";
+}
+
 function startDragTracking(chip, downEvent) {
-  const isGroupDrag = selection.has(chip.raw) && selection.size > 1;
+  const mode = dragZone(chip, downEvent);
+  const isGroupDrag = mode === "move" && selection.has(chip.raw) && selection.size > 1;
   const groupRaws = isGroupDrag ? [...selection.keys()] : [chip.raw];
+  const rect = chip.el.getBoundingClientRect();
   drag = {
     chip,
+    mode,
+    origHeightStyle: chip.el.style.height,
+    origHeightPx: rect.height,
     isGroupDrag,
     groupRaws,
     groupEls: collectGroupEls(chip, groupRaws),
@@ -292,9 +524,25 @@ function onDragMove(e) {
   e.preventDefault();
   e.stopImmediatePropagation();
 
-  drag.deltaMin = Math.round(dy / drag.ppm);
-  const px = drag.deltaMin * drag.ppm;
-  drag.groupEls.forEach((el) => (el.style.transform = `translateY(${px}px)`));
+  let deltaMin = Math.round(dy / drag.ppm);
+  if (drag.mode === "move") {
+    drag.deltaMin = deltaMin;
+    const px = deltaMin * drag.ppm;
+    drag.groupEls.forEach((el) => (el.style.transform = `translateY(${px}px)`));
+  } else {
+    // Resize: clamp so the event never drops below 1 minute.
+    const origMin = Math.max(1, Math.round(drag.origHeightPx / drag.ppm));
+    if (drag.mode === "end") deltaMin = Math.max(deltaMin, -(origMin - 1));
+    else deltaMin = Math.min(deltaMin, origMin - 1);
+    drag.deltaMin = deltaMin;
+    const el = drag.chip.el;
+    if (drag.mode === "end") {
+      el.style.height = `${drag.origHeightPx + deltaMin * drag.ppm}px`;
+    } else {
+      el.style.transform = `translateY(${deltaMin * drag.ppm}px)`;
+      el.style.height = `${drag.origHeightPx - deltaMin * drag.ppm}px`;
+    }
+  }
 
   const tip = ensureTooltip();
   tip.style.left = `${e.clientX + 14}px`;
@@ -309,11 +557,16 @@ function onDragMove(e) {
   if (ev && ev.start && ev.start.dateTime) {
     const start = new Date(ev.start.dateTime);
     const end = new Date(ev.end.dateTime);
-    start.setMinutes(start.getMinutes() + drag.deltaMin);
-    end.setMinutes(end.getMinutes() + drag.deltaMin);
-    tip.textContent = `${fmtTime(start)} – ${fmtTime(end)}  (${deltaTxt})${groupTxt}`;
+    if (drag.mode !== "end") start.setMinutes(start.getMinutes() + drag.deltaMin);
+    if (drag.mode !== "start") end.setMinutes(end.getMinutes() + drag.deltaMin);
+    if (drag.mode === "move") {
+      tip.textContent = `${fmtTime(start)} – ${fmtTime(end)}  (${deltaTxt})${groupTxt}`;
+    } else {
+      const dur = Math.max(1, Math.round((end - start) / 60000));
+      tip.textContent = `${fmtTime(start)} – ${fmtTime(end)}  (${dur} min long)`;
+    }
   } else {
-    tip.textContent = `${deltaTxt}${groupTxt}`;
+    tip.textContent = drag.mode === "move" ? `${deltaTxt}${groupTxt}` : `length ${deltaTxt}`;
   }
 }
 
@@ -338,11 +591,37 @@ async function onDragUp(e) {
   d.groupEls.forEach((el) => el.classList.remove("gpm-dragging"));
   drag = null;
 
-  const clearVisuals = () =>
-    setTimeout(() => d.groupEls.forEach((el) => (el.style.transform = "")), 2500);
-
   if (d.deltaMin === 0) {
     d.groupEls.forEach((el) => (el.style.transform = ""));
+    if (d.mode !== "move") d.chip.el.style.height = d.origHeightStyle;
+    return;
+  }
+
+  if (d.mode !== "move") {
+    // Resize commit: move only the grabbed edge, in 1-minute increments.
+    try {
+      const edge = d.mode === "start" ? "Start" : "End";
+      toast(`${edge}: ${d.deltaMin > 0 ? "+" : ""}${d.deltaMin} min…`, 30000);
+      await d.eventPromise;
+      if (d.eventData && !d.eventData.start?.dateTime) {
+        toast("That's an all-day event — precision resize applies to timed events.");
+        d.chip.el.style.transform = "";
+        d.chip.el.style.height = d.origHeightStyle;
+        return;
+      }
+      await bg({
+        type: "resizeEvent",
+        calendarId: d.chip.calendarId,
+        eventId: d.chip.eventId,
+        deltaStartMin: d.mode === "start" ? d.deltaMin : 0,
+        deltaEndMin: d.mode === "end" ? d.deltaMin : 0,
+      });
+      toast(`${edge} moved ${d.deltaMin > 0 ? "+" : ""}${d.deltaMin} min.`);
+    } catch (err) {
+      toast(`Resize failed: ${err.message}`, 8000);
+    } finally {
+      watchAndClear([{ el: d.chip.el, height: d.origHeightStyle }]);
+    }
     return;
   }
 
@@ -370,8 +649,8 @@ async function onDragUp(e) {
   } catch (err) {
     toast(`Move failed: ${err.message}`, 8000);
   } finally {
-    // Leave the ghost offset briefly so chips don't jump back before GCal repaints.
-    clearVisuals();
+    // Keep the ghost offset until GCal actually repaints the moved chips.
+    watchAndClear(d.groupEls);
   }
 }
 
@@ -379,6 +658,7 @@ function cancelDrag() {
   if (!drag) return;
   window.removeEventListener("mousemove", onDragMove, true);
   window.removeEventListener("mouseup", onDragUp, true);
+  if (drag.mode !== "move") drag.chip.el.style.height = drag.origHeightStyle;
   drag.groupEls.forEach((el) => {
     el.classList.remove("gpm-dragging");
     el.style.transform = "";
@@ -421,6 +701,12 @@ document.addEventListener(
   "keydown",
   (e) => {
     if (e.key === "Escape") {
+      if (remDialog) {
+        closeReminderDialog();
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (drag) {
         cancelDrag();
         e.preventDefault();

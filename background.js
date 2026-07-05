@@ -199,6 +199,29 @@ function wallClockIn(date, timeZone) {
   return `${p.year}${p.month}${p.day}T${hour}${p.minute}${p.second}`;
 }
 
+function basicUtc(ms) {
+  const d = new Date(ms);
+  const p = (n, l = 2) => String(n).padStart(l, "0");
+  return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+
+/** Convert a wall-clock time in an IANA timezone to a UTC epoch (ms), or null on DST edge. */
+function zonedWallClockToUtc(parts, timeZone) {
+  const target = Date.UTC(parts.y, parts.mo - 1, parts.d, parts.h ?? 0, parts.mi ?? 0, parts.s ?? 0);
+  let guess = target;
+  for (let i = 0; i < 4; i++) {
+    const w = wallClockIn(new Date(guess), timeZone); // YYYYMMDDTHHMMSS
+    const asUtc = Date.UTC(
+      +w.slice(0, 4), +w.slice(4, 6) - 1, +w.slice(6, 8),
+      +w.slice(9, 11), +w.slice(11, 13), +w.slice(13, 15)
+    );
+    const diff = target - asUtc;
+    if (diff === 0) return guess;
+    guess += diff;
+  }
+  return null;
+}
+
 async function tryGet(calendarId, eventId) {
   try {
     return await apiFetch(`/calendars/${enc(calendarId)}/events/${enc(eventId)}`);
@@ -230,18 +253,41 @@ async function resolveEvent(calendarId, eventId) {
   const searchCals = [...new Set([...candidates, ...allCals])];
 
   if (rec) {
-    const { base, parts } = rec;
-    // Interpret the suffix loosely as UTC to build a generous search window (±2 days
-    // absorbs any timezone offset and DST weirdness).
-    const approx = Date.UTC(parts.y, parts.mo - 1, parts.d, parts.h ?? 0, parts.mi ?? 0, parts.s ?? 0);
-    const timeMin = new Date(approx - 2 * 86400_000).toISOString();
-    const timeMax = new Date(approx + 2 * 86400_000).toISOString();
+    const { base, parts, raw } = rec;
+    const naive = Date.UTC(parts.y, parts.mo - 1, parts.d, parts.h ?? 0, parts.mi ?? 0, parts.s ?? 0);
+    let sawMaster = false;
 
     for (const cal of searchCals) {
       const master = await tryGet(cal, base);
       if (!master) continue;
+      sawMaster = true;
+      const tz = master.start?.timeZone || "UTC";
+
+      // (a) Deterministic path: the DOM suffix is the instance's ORIGINAL start in
+      // local wall-clock time. Convert it to UTC in the series' timezone and request
+      // exactly that instance id. No guessing.
+      if (parts.h !== null) {
+        const utcMs = zonedWallClockToUtc(parts, tz);
+        if (utcMs !== null) {
+          const idUtc = `${base}_${basicUtc(utcMs)}Z`;
+          const exact = await tryGet(cal, idUtc);
+          if (exact) return { calendarId: cal, eventId: idUtc, event: exact };
+        }
+        // Some surfaces already emit the suffix in UTC.
+        const idAsUtc = `${base}_${raw.endsWith("Z") ? raw : raw + "Z"}`;
+        const exact2 = await tryGet(cal, idAsUtc);
+        if (exact2) return { calendarId: cal, eventId: idAsUtc, event: exact2 };
+      }
+
+      // (b) Fallback: list instances in a tight window and require an EXACT match on
+      // wall clock or UTC — including against originalStartTime, so occurrences that
+      // were already moved (exceptions) still resolve. NEVER "take the nearest/only
+      // instance": a wrong pick moves a different day's occurrence, which looks like
+      // the original staying put while a duplicate appears.
       let data;
       try {
+        const timeMin = new Date(naive - 26 * 3600_000).toISOString();
+        const timeMax = new Date(naive + 26 * 3600_000).toISOString();
         data = await apiFetch(
           `/calendars/${enc(cal)}/events/${enc(base)}/instances?timeMin=${enc(timeMin)}&timeMax=${enc(timeMax)}&maxResults=50`
         );
@@ -249,23 +295,35 @@ async function resolveEvent(calendarId, eventId) {
         continue;
       }
       const instances = data.items || [];
-      const tz = master.start?.timeZone;
-
       const wantDate = `${String(parts.y).padStart(4, "0")}${String(parts.mo).padStart(2, "0")}${String(parts.d).padStart(2, "0")}`;
       const wantFull = parts.h === null
         ? null
         : `${wantDate}T${String(parts.h).padStart(2, "0")}${String(parts.mi).padStart(2, "0")}${String(parts.s).padStart(2, "0")}`;
 
-      let hit = instances.find((ins) => {
+      const hit = instances.find((ins) => {
         if (ins.start?.date) return ins.start.date.replace(/-/g, "") === wantDate;
+        if (!ins.start?.dateTime) return false;
+        const candidates = [];
         const st = new Date(ins.start.dateTime);
-        const local = wallClockIn(st, ins.start.timeZone || tz || "UTC");
-        const utc = wallClockIn(st, "UTC");
-        if (wantFull) return local === wantFull || utc === wantFull;
-        return local.slice(0, 8) === wantDate || utc.slice(0, 8) === wantDate;
+        candidates.push(wallClockIn(st, ins.start.timeZone || tz), wallClockIn(st, "UTC"));
+        if (ins.originalStartTime?.dateTime) {
+          const ost = new Date(ins.originalStartTime.dateTime);
+          candidates.push(
+            wallClockIn(ost, ins.originalStartTime.timeZone || tz),
+            wallClockIn(ost, "UTC")
+          );
+        }
+        if (wantFull) return candidates.includes(wantFull);
+        return candidates.some((c) => c.slice(0, 8) === wantDate);
       });
-      if (!hit && instances.length === 1) hit = instances[0];
       if (hit) return { calendarId: cal, eventId: hit.id, event: hit };
+    }
+
+    if (sawMaster) {
+      throw new Error(
+        `Couldn't pin down the exact occurrence of this recurring event. Refusing to guess ` +
+          `(moving the wrong occurrence would look like a duplicate). Reload the Calendar tab and retry.`
+      );
     }
   }
 
@@ -327,7 +385,7 @@ const handlers = {
         start: { date: shiftDate(ev.start.date) },
         end: { date: shiftDate(ev.end.date) },
       });
-      return { ok: true, event: updated };
+      return { ok: true, calendarId: ref.calendarId, event: updated };
     }
 
     const shiftDateTime = (obj) => {
@@ -342,7 +400,28 @@ const handlers = {
       start: shiftDateTime(ev.start),
       end: shiftDateTime(ev.end),
     });
-    return { ok: true, event: updated };
+    return { ok: true, calendarId: ref.calendarId, event: updated };
+  },
+
+  /** Resize an event: shift only its start or only its end by N minutes. */
+  async resizeEvent({ calendarId, eventId, deltaStartMin = 0, deltaEndMin = 0 }) {
+    const ref = await resolveEvent(calendarId, eventId);
+    const ev = ref.event;
+    if (!ev.start?.dateTime) {
+      return { skipped: true, reason: "not a timed event", id: eventId };
+    }
+    const s = new Date(ev.start.dateTime);
+    s.setUTCMinutes(s.getUTCMinutes() + deltaStartMin);
+    const e = new Date(ev.end.dateTime);
+    e.setUTCMinutes(e.getUTCMinutes() + deltaEndMin);
+    if (e.getTime() - s.getTime() < 60_000) {
+      throw new Error("Resize would make the event shorter than 1 minute.");
+    }
+    const updated = await patchTimes(ref, {
+      start: { dateTime: s.toISOString(), ...(ev.start.timeZone ? { timeZone: ev.start.timeZone } : {}) },
+      end: { dateTime: e.toISOString(), ...(ev.end.timeZone ? { timeZone: ev.end.timeZone } : {}) },
+    });
+    return { ok: true, calendarId: ref.calendarId, event: updated };
   },
 
   /** Set a new absolute start (ISO string), preserving duration. */
@@ -360,13 +439,14 @@ const handlers = {
       start: { dateTime: newStart.toISOString(), ...(ev.start.timeZone ? { timeZone: ev.start.timeZone } : {}) },
       end: { dateTime: newEnd.toISOString(), ...(ev.end.timeZone ? { timeZone: ev.end.timeZone } : {}) },
     });
-    return { ok: true, event: updated };
+    return { ok: true, calendarId: ref.calendarId, event: updated };
   },
 };
 
 // Chrome MV3: async responses must use sendResponse + `return true`
 // (returning a Promise from the listener is Firefox-only behavior).
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === "gpm-play-sound") return false; // handled by the offscreen page
   const handler = handlers[msg?.type];
   if (!handler) {
     sendResponse({ error: `Unknown message type: ${msg?.type}` });
@@ -377,3 +457,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     .catch((e) => sendResponse({ error: e.message || String(e) }));
   return true; // keep the message channel open for the async response
 });
+
+// Reminder engine (shares this global scope; must load after handlers exist).
+importScripts("reminders.js");
