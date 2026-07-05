@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GCal Precision Mover",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Bulk-move Google Calendar events and reposition them in 1-minute increments (Alt+drag, Alt+arrow nudge, bulk shift panel).",
   "minimum_chrome_version": "120",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvVNBiePPVnEJ5SxO88Oe0Y1fK8sv/Lf7FVFBLaUw2iqfWWJwFd2QFvDhRsYTUA9j1MHLk/tIBgDGlMiwlcAhvtb5OW9Ig/pwzamEuXOfK9lrIYuf72+6VfvlTe+kdtNYNfOtUB9Hs7jaJDqAEmdK5Cq33p97DPrZ+L6Qg5fRynYwf+e4cPtaH6ngmcT3d7bfcxMEmueYWG8SRcRS3nUd46LWckV/AoBsIlAmY6LVKv76jd97Sekxqx0/CwY6KBzJVadA2nZPF2UagFATZRtYbwyGS2gAHXjhAQEuh0SWKKNP58jf+1Ig3zL+Qdg44UgQrmUWOiMfXyqVKDf97mlGBwIDAQAB",
