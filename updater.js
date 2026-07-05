@@ -247,12 +247,74 @@ Object.assign(handlers, {
   },
 });
 
+// Auto-reload on update -------------------------------------------------------
+// Goal: never keep running old code after new files land on disk.
+
+/**
+ * Unpacked/git installs: compare the manifest version ON DISK (served fresh
+ * by chrome-extension://) with the version this worker was LOADED with. They
+ * diverge when `git pull` ran outside the updateNow flow (manually, or via
+ * the helper from another browser profile) — in that case, reload so Chrome
+ * picks up the new files. Returns true when a reload was triggered.
+ */
+async function gpmReloadIfStale() {
+  try {
+    const res = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
+    if (!res.ok) return false;
+    const diskVer = (await res.json()).version;
+    if (!diskVer || gpmCmpVer(diskVer, chrome.runtime.getManifest().version) === 0) {
+      return false;
+    }
+    // Safety valve: never reload more than once a minute, in case something
+    // ever makes disk/runtime versions disagree persistently.
+    const { gpmLastAutoReload } = await chrome.storage.local.get("gpmLastAutoReload");
+    if (gpmLastAutoReload && Date.now() - gpmLastAutoReload < 60_000) return false;
+    await chrome.storage.local.set({ gpmLastAutoReload: Date.now() });
+    chrome.runtime.reload();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Chrome-managed updates (e.g. if this ever ships via the Web Store or a
+// policy install): apply the downloaded update immediately instead of letting
+// the old version linger until the next browser restart.
+chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload());
+
+// After every install/update/reload, re-inject the content script into open
+// Calendar tabs so they run the NEW code right away. The fresh copy announces
+// itself and the orphaned old copy tears down (handshake in content.js) — no
+// manual tab refresh, no stale scripts.
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== "install" && reason !== "update") return;
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: "https://calendar.google.com/*" });
+  } catch (_) {
+    return;
+  }
+  for (const tab of tabs) {
+    try {
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["content.css"] });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+    } catch (_) {
+      /* discarded/errored tab — it gets the new script on its next load */
+    }
+  }
+});
+
+// Catch stale code as soon as the worker wakes.
+gpmReloadIfStale();
+
 // Scheduling ------------------------------------------------------------------
 
 chrome.alarms.create(GPM_UPD.ALARM, {
   delayInMinutes: 1,
   periodInMinutes: GPM_UPD.PERIOD_MIN,
 });
-chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === GPM_UPD.ALARM) gpmCheckForUpdate();
+chrome.alarms.onAlarm.addListener(async (a) => {
+  if (a.name !== GPM_UPD.ALARM) return;
+  if (await gpmReloadIfStale()) return; // new files already on disk — just reload
+  gpmCheckForUpdate();
 });

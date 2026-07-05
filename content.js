@@ -14,6 +14,12 @@
 
 "use strict";
 
+// The whole script lives in an IIFE so the background can re-inject this file
+// into an already-open tab after an extension update without "identifier has
+// already been declared" errors. The fresh copy announces itself and the old,
+// orphaned copy tears itself down — see the handshake at the bottom.
+(() => {
+
 // Chrome build: alias the WebExtension namespace (Chrome MV3 APIs are promise-based).
 const browser = globalThis.browser ?? chrome;
 
@@ -295,6 +301,17 @@ async function openReminderDialog(target) {
     </div>`;
   document.body.appendChild(remDialog);
 
+  // Keep backdrop pointer activity from reaching GCal underneath — the modal
+  // should be fully isolated from the page while it's open.
+  for (const t of ["pointerdown", "mousedown", "mouseup"]) {
+    remDialog.addEventListener(t, (e) => {
+      if (e.target === remDialog) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+  }
+
   // Prefill from the notification defaults configured in the toolbar popup.
   remBackdropClose = false;
   try {
@@ -466,7 +483,7 @@ function watchAndClear(items) {
   if (list.length) pendingVisuals.add({ items: list, started: Date.now() });
 }
 
-setInterval(() => {
+const gpmVisualsTimer = setInterval(() => {
   for (const entry of [...pendingVisuals]) {
     const repainted = entry.items.some((it) => !it.el.isConnected);
     if (repainted || Date.now() - entry.started > 30000) {
@@ -746,60 +763,53 @@ function cancelDrag() {
 // Global listeners
 // ---------------------------------------------------------------------------
 
-document.addEventListener(
-  "mousedown",
-  (e) => {
-    if (!e.altKey || e.button !== 0) return;
-    const chip = findChip(e.target);
-    if (!chip) return;
-    // Keep GCal's own drag/open logic out of the way while Alt is held.
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    startDragTracking(chip, e);
-  },
-  true
-);
+// Named handlers so gpmTeardown() can detach them when a newer copy of this
+// script is injected after an extension update.
+function onGlobalMouseDown(e) {
+  if (!e.altKey || e.button !== 0) return;
+  const chip = findChip(e.target);
+  if (!chip) return;
+  // Keep GCal's own drag/open logic out of the way while Alt is held.
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  startDragTracking(chip, e);
+}
+document.addEventListener("mousedown", onGlobalMouseDown, true);
 
 // Swallow the click GCal would otherwise use to open the event bubble.
-document.addEventListener(
-  "click",
-  (e) => {
-    if (Date.now() < suppressNextClickUntil) {
+function onGlobalClick(e) {
+  if (Date.now() < suppressNextClickUntil) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+}
+document.addEventListener("click", onGlobalClick, true);
+
+function onGlobalKeyDown(e) {
+  if (e.key === "Escape") {
+    if (remDialog) {
+      closeReminderDialog();
       e.preventDefault();
       e.stopImmediatePropagation();
-    }
-  },
-  true
-);
-
-document.addEventListener(
-  "keydown",
-  (e) => {
-    if (e.key === "Escape") {
-      if (remDialog) {
-        closeReminderDialog();
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        return;
-      }
-      if (drag) {
-        cancelDrag();
-        e.preventDefault();
-        e.stopImmediatePropagation();
-      } else if (selection.size) {
-        clearSelection();
-      }
       return;
     }
-    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && selection.size) {
+    if (drag) {
+      cancelDrag();
       e.preventDefault();
       e.stopImmediatePropagation();
-      const step = e.shiftKey ? 5 : 1;
-      shiftSelected(e.key === "ArrowUp" ? -step : step);
+    } else if (selection.size) {
+      clearSelection();
     }
-  },
-  true
-);
+    return;
+  }
+  if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && selection.size) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const step = e.shiftKey ? 5 : 1;
+    shiftSelected(e.key === "ArrowUp" ? -step : step);
+  }
+}
+document.addEventListener("keydown", onGlobalKeyDown, true);
 
 // First-run auth nudge.
 (async () => {
@@ -846,10 +856,11 @@ document.addEventListener(
       res = null;
     }
     if (res && res.ok && res.updated) {
-      text.textContent = `Updated to ${st.latest} ✓ — refresh this tab to load the new version.`;
+      // The background reloads the extension and re-injects the new content
+      // script, which tears this banner down — no manual refresh needed.
+      text.textContent = `Updated to ${st.latest} ✓ — reloading…`;
       updBtn.remove();
-      skipBtn.textContent = "Refresh now";
-      skipBtn.onclick = () => location.reload();
+      skipBtn.remove();
       return;
     }
     if (res && res.ok && !res.updated) {
@@ -888,4 +899,50 @@ document.addEventListener(
 
   bar.append(text, updBtn, skipBtn, closeBtn);
   document.body.appendChild(bar);
+})();
+
+// ---------------------------------------------------------------------------
+// Single-instance handshake. After an extension update/reload, the background
+// re-injects this file into open Calendar tabs (updater.js onInstalled). The
+// old copy is orphaned — its chrome.* calls would all throw "Extension context
+// invalidated" — so the fresh copy announces itself and the old one detaches
+// every listener/timer and removes its UI before the new one takes over.
+// ---------------------------------------------------------------------------
+
+function gpmTeardown() {
+  try {
+    observer.disconnect();
+  } catch (_) {}
+  clearInterval(gpmVisualsTimer);
+  clearTimeout(toastTimer);
+  document.removeEventListener("mousedown", onGlobalMouseDown, true);
+  document.removeEventListener("click", onGlobalClick, true);
+  document.removeEventListener("keydown", onGlobalKeyDown, true);
+  // In case a precision drag was mid-flight.
+  window.removeEventListener("mousemove", onDragMove, true);
+  window.removeEventListener("mouseup", onDragUp, true);
+  // Release any optimistic-position overrides we still hold on GCal's chips.
+  for (const entry of pendingVisuals) {
+    entry.items.forEach((it) => {
+      it.el.style.transform = "";
+      if (it.height !== null) it.el.style.height = it.height;
+    });
+  }
+  pendingVisuals.clear();
+  // Remove every element this instance injected...
+  document
+    .querySelectorAll(".gpm-panel, .gpm-toast, .gpm-dialog, .gpm-tooltip, .gpm-update-banner, .gpm-bubble-btn")
+    .forEach((el) => el.remove());
+  // ...and every class/style we put on GCal's own nodes.
+  document.querySelectorAll(".gpm-selected, .gpm-dragging").forEach((el) => {
+    el.classList.remove("gpm-selected", "gpm-dragging");
+    el.style.transform = "";
+  });
+}
+
+const GPM_INSTANCE_EVT = "gpm-precision-mover#new-instance";
+// Tell any previous copy to shut down, then listen for the next generation.
+document.dispatchEvent(new CustomEvent(GPM_INSTANCE_EVT));
+document.addEventListener(GPM_INSTANCE_EVT, gpmTeardown, { once: true });
+
 })();
