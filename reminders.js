@@ -53,6 +53,11 @@ async function notify(id, title, message) {
  *  OS may suppress its own sound, so the extension brings its own. */
 async function playSound() {
   try {
+    // Respect the "play sound" toggle in the popup settings (default: on).
+    try {
+      const { gpmNotifSettings } = await RT.storage.local.get("gpmNotifSettings");
+      if (gpmNotifSettings && gpmNotifSettings.sound === false) return;
+    } catch (_) {}
     if (RT.offscreen && RT.offscreen.createDocument) {
       // Chrome MV3: service workers can't play audio; use an offscreen document.
       try {

@@ -70,6 +70,12 @@ async function gpmCheckForUpdate() {
   if (st.dismissed === latest) return; // user chose "skip this version"
   if (st.notified === latest) return; // already notified for this version
 
+  // Respect the "system notification for updates" toggle (default: on).
+  try {
+    const { gpmNotifSettings } = await chrome.storage.local.get("gpmNotifSettings");
+    if (gpmNotifSettings && gpmNotifSettings.updateNotify === false) return;
+  } catch (_) {}
+
   await gpmUpdSave({ notified: latest });
   chrome.notifications.create(GPM_UPD.NOTIF_PREFIX + latest, {
     type: "basic",
@@ -116,12 +122,18 @@ Object.assign(handlers, {
       !!fresh.latest &&
       gpmCmpVer(fresh.latest, current) > 0 &&
       fresh.dismissed !== fresh.latest;
+    let showBanner = true;
+    try {
+      const { gpmNotifSettings } = await chrome.storage.local.get("gpmNotifSettings");
+      if (gpmNotifSettings && gpmNotifSettings.updateBanner === false) showBanner = false;
+    } catch (_) {}
     return {
       ok: true,
       updateAvailable,
       latest: fresh.latest,
       current,
       lastCheck: fresh.lastCheck,
+      showBanner,
       url: GPM_UPD.REPO_URL,
     };
   },

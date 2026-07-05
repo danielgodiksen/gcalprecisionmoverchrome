@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <style>
     body {
-      width: 260px;
+      width: 300px;
       margin: 0;
       padding: 14px;
       background: #202124;
@@ -12,6 +12,16 @@
       font: 500 13px/1.5 Roboto, Arial, sans-serif;
     }
     h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+    h2 {
+      margin: 16px 0 8px;
+      padding-top: 12px;
+      border-top: 1px solid #3c4043;
+      font-size: 12px;
+      font-weight: 600;
+      color: #9aa0a6;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
     .muted { color: #9aa0a6; font-size: 12px; font-weight: 400; }
     #status { margin: 10px 0; min-height: 18px; }
     #status.update { color: #8ab4f8; }
@@ -33,11 +43,54 @@
     button:disabled { opacity: 0.5; cursor: default; }
     .hidden { display: none; }
     #footer { margin-top: 10px; }
+
+    /* Settings */
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      cursor: pointer;
+      font-weight: 400;
+    }
+    .toggle input { accent-color: #1a73e8; margin: 0; }
+    .field { margin: 8px 0 2px; }
+    .field label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 400;
+      color: #9aa0a6;
+      margin-bottom: 3px;
+    }
+    .field input[type="text"],
+    .field input[type="number"] {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #5f6368;
+      border-radius: 6px;
+      background: #292a2d;
+      color: #e8eaed;
+      font: inherit;
+      font-weight: 400;
+    }
+    .field input:focus { outline: none; border-color: #8ab4f8; }
+    .field-pair { display: flex; gap: 8px; }
+    .field-pair .field { flex: 1; }
+    #saved {
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: #81c995;
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+    #saved.show { opacity: 1; }
   </style>
 </head>
 <body>
   <h1>GCal Precision Mover</h1>
   <div class="muted">Installed version: <span id="current">…</span></div>
+
   <div id="status" class="muted"></div>
   <div class="row">
     <button id="check" class="primary">Check for updates</button>
@@ -46,6 +99,42 @@
   <div id="footer" class="row hidden">
     <button id="skip">Skip this version</button>
   </div>
+
+  <h2>Notifications</h2>
+  <label class="toggle">
+    <input type="checkbox" id="s-sound" />
+    Play sound with notifications
+  </label>
+  <label class="toggle">
+    <input type="checkbox" id="s-upd-notify" />
+    System notification when an update is on GitHub
+  </label>
+  <label class="toggle">
+    <input type="checkbox" id="s-upd-banner" />
+    Update banner inside Google Calendar
+  </label>
+
+  <h2>Defaults for new reminders</h2>
+  <div class="field">
+    <label for="s-leads">Alert before start (minutes, comma-separated; 0 = at start)</label>
+    <input type="text" id="s-leads" placeholder="5,0" />
+  </div>
+  <div class="field-pair">
+    <div class="field">
+      <label for="s-focus">Focus ping every N min (0 = off)</label>
+      <input type="number" id="s-focus" min="0" step="5" />
+    </div>
+    <div class="field">
+      <label for="s-fumin">Follow-up length (min)</label>
+      <input type="number" id="s-fumin" min="5" step="5" />
+    </div>
+  </div>
+  <label class="toggle">
+    <input type="checkbox" id="s-fu" />
+    Prompt for a follow-up when events end
+  </label>
+  <div id="saved">Saved ✓</div>
+
   <script src="popup.js"></script>
 </body>
 </html>

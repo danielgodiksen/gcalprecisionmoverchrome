@@ -290,6 +290,20 @@ async function openReminderDialog(target) {
       Reminders fire while the browser is open (no Calendar tab needed).</div>
     </div>`;
   document.body.appendChild(remDialog);
+
+  // Prefill from the notification defaults configured in the toolbar popup.
+  try {
+    const { gpmNotifSettings: ns } = await browser.storage.local.get("gpmNotifSettings");
+    if (ns) {
+      if (ns.defLeads) remDialog.querySelector('[data-r="leads"]').value = ns.defLeads;
+      if (ns.defFocusEvery != null)
+        remDialog.querySelector('[data-r="focus"]').value = ns.defFocusEvery;
+      remDialog.querySelector('[data-r="fu"]').checked = !!ns.defFollowUp;
+      if (ns.defFollowUpMin)
+        remDialog.querySelector('[data-r="fumin"]').value = ns.defFollowUpMin;
+    }
+  } catch (_) {}
+
   remDialog.querySelector('[data-r="add"]').textContent = remTarget
     ? "Watch this event"
     : `Watch ${selection.size} selected event${selection.size === 1 ? "" : "s"}`;
@@ -799,7 +813,7 @@ document.addEventListener(
   } catch (_) {
     return; // background not ready / check failed — stay quiet
   }
-  if (!st || !st.updateAvailable) return;
+  if (!st || !st.updateAvailable || st.showBanner === false) return;
 
   const bar = document.createElement("div");
   bar.className = "gpm-update-banner";
