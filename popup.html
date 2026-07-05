@@ -43,6 +43,18 @@
     button:disabled { opacity: 0.5; cursor: default; }
     .hidden { display: none; }
     #footer { margin-top: 10px; }
+    code {
+      display: block;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #292a2d;
+      border: 1px solid #3c4043;
+      font: 12px/1.4 Menlo, Consolas, monospace;
+      color: #8ab4f8;
+      user-select: all;
+      word-break: break-all;
+    }
+    #status.good { color: #81c995; }
 
     /* Settings */
     .toggle {
@@ -94,10 +106,22 @@
   <div id="status" class="muted"></div>
   <div class="row">
     <button id="check" class="primary">Check for updates</button>
-    <button id="open" class="hidden">Open GitHub</button>
+    <button id="update" class="primary hidden">Update now</button>
   </div>
   <div id="footer" class="row hidden">
+    <button id="view">View new code</button>
     <button id="skip">Skip this version</button>
+  </div>
+  <div id="setup" class="hidden">
+    <div class="muted" style="margin: 10px 0 6px;">
+      One-click updates need a tiny helper (installed once). In Terminal, run
+      the install script inside the extension folder:
+    </div>
+    <code id="setup-cmd">bash native-host/install.sh</code>
+    <div class="row" style="margin-top: 8px;">
+      <button id="copy-cmd">Copy command</button>
+      <button id="open-gh">Open GitHub instead</button>
+    </div>
   </div>
 
   <h2>Notifications</h2>

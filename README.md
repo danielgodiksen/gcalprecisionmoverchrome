@@ -135,3 +135,24 @@ content.js      Alt+drag / Alt+click / nudges / bulk panel
 content.css     injected UI styles
 options.html/js Client ID configuration + auth test
 ```
+
+## Updates
+
+The extension checks GitHub every 6 hours and shows a banner/notification when
+`main` has a newer version.
+
+**One-click updates** (recommended): run this once in Terminal, then the
+"Update now" button in the toolbar popup (and the Calendar banner) will
+`git pull` the latest code and reload the extension automatically:
+
+```bash
+cd /path/to/gcalprecisionmoverchrome
+bash native-host/install.sh
+```
+
+This registers a small [native messaging host](native-host/gpm_native_host.py)
+that Chrome launches on demand. It only runs `git fetch` + `git merge --ff-only`
+inside this folder and refuses to touch uncommitted local changes.
+"View new code" in the popup opens a GitHub diff of exactly what would change.
+
+To remove it: `bash native-host/install.sh --uninstall`.

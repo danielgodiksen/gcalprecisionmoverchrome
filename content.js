@@ -822,12 +822,41 @@ document.addEventListener(
   text.className = "gpm-update-banner__text";
   text.textContent = `GCal Precision Mover ${st.latest} is available on GitHub (you have ${st.current}). Update?`;
 
-  const openBtn = document.createElement("button");
-  openBtn.className = "gpm-update-banner__btn gpm-update-banner__btn--primary";
-  openBtn.textContent = "Open GitHub";
-  openBtn.addEventListener("click", () => {
-    window.open(st.url, "_blank", "noopener");
-    bar.remove();
+  const updBtn = document.createElement("button");
+  updBtn.className = "gpm-update-banner__btn gpm-update-banner__btn--primary";
+  updBtn.textContent = "Update now";
+  updBtn.addEventListener("click", async () => {
+    updBtn.disabled = true;
+    updBtn.textContent = "Updating…";
+    let res;
+    try {
+      res = await bg({ type: "updateNow" });
+    } catch (_) {
+      res = null;
+    }
+    if (res && res.ok && res.updated) {
+      text.textContent = `Updated to ${st.latest} ✓ — refresh this tab to load the new version.`;
+      updBtn.remove();
+      skipBtn.textContent = "Refresh now";
+      skipBtn.onclick = () => location.reload();
+      return;
+    }
+    if (res && res.ok && !res.updated) {
+      text.textContent = "Code already matches GitHub.";
+      updBtn.remove();
+      return;
+    }
+    // Helper not installed (or pull failed) — fall back to GitHub.
+    text.textContent =
+      res && res.helperMissing
+        ? "One-click updates need the helper (run native-host/install.sh once) — or update via GitHub:"
+        : `Update failed: ${(res && res.error) || "helper unavailable"}. Update via GitHub:`;
+    updBtn.disabled = false;
+    updBtn.textContent = "Open GitHub";
+    updBtn.onclick = () => {
+      window.open(st.url, "_blank", "noopener");
+      bar.remove();
+    };
   });
 
   const skipBtn = document.createElement("button");
@@ -846,6 +875,6 @@ document.addEventListener(
   closeBtn.title = "Dismiss (asks again next session)";
   closeBtn.addEventListener("click", () => bar.remove());
 
-  bar.append(text, openBtn, skipBtn, closeBtn);
+  bar.append(text, updBtn, skipBtn, closeBtn);
   document.body.appendChild(bar);
 })();

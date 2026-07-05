@@ -14,13 +14,43 @@
 "use strict";
 
 const GPM_UPD = {
+  // GitHub API: always fresh (raw.githubusercontent.com is CDN-cached and can
+  // serve a stale manifest for several minutes after a push).
+  API_MANIFEST:
+    "https://api.github.com/repos/danielgodiksen/gcalprecisionmoverchrome/contents/manifest.json?ref=main",
   RAW_MANIFEST:
     "https://raw.githubusercontent.com/danielgodiksen/gcalprecisionmoverchrome/main/manifest.json",
   REPO_URL: "https://github.com/danielgodiksen/gcalprecisionmoverchrome",
   ALARM: "gpm-upd-check",
   PERIOD_MIN: 360, // check every 6 hours
   NOTIF_PREFIX: "gpm-upd|",
+  // Native messaging host (native-host/install.sh registers it): lets the
+  // extension run `git pull` in its own folder for true one-click updates.
+  NATIVE_HOST: "com.danielgodiksen.gpm_updater",
 };
+
+/** Talk to the local update helper. Rejects if it isn't installed. */
+function gpmNative(cmd) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendNativeMessage(GPM_UPD.NATIVE_HOST, { cmd }, (res) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (!res || res.ok === false) {
+          reject(new Error((res && res.error) || "Update helper failed."));
+        } else {
+          resolve(res);
+        }
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+function gpmHostMissing(e) {
+  return /native messaging host|not found|forbidden/i.test(String(e && e.message));
+}
 
 /** Compare dotted versions: 1 if a > b, -1 if a < b, 0 if equal. */
 function gpmCmpVer(a, b) {
@@ -47,18 +77,31 @@ async function gpmUpdSave(patch) {
   await chrome.storage.local.set({ gpmUpdate: { ...st, ...patch } });
 }
 
-/** Fetch the manifest on main and, if newer, notify (once per version). */
-async function gpmCheckForUpdate() {
-  let latest;
+/** Get the version on main: GitHub API first (fresh), raw CDN as fallback. */
+async function gpmFetchLatestVersion() {
   try {
+    const res = await fetch(GPM_UPD.API_MANIFEST, {
+      cache: "no-store",
+      headers: { Accept: "application/vnd.github.raw+json" },
+    });
+    if (res.ok) {
+      const v = (await res.json()).version;
+      if (v) return v;
+    }
+  } catch (_) {}
+  try {
+    // Fallback (e.g. API rate-limited): may lag a few minutes behind a push.
     const res = await fetch(`${GPM_UPD.RAW_MANIFEST}?t=${Date.now()}`, {
       cache: "no-store",
     });
-    if (!res.ok) return;
-    latest = (await res.json()).version;
-  } catch (_) {
-    return; // offline / GitHub hiccup — try again on the next alarm
-  }
+    if (res.ok) return (await res.json()).version;
+  } catch (_) {}
+  return null; // offline / GitHub hiccup — try again on the next alarm
+}
+
+/** Fetch the manifest on main and, if newer, notify (once per version). */
+async function gpmCheckForUpdate() {
+  const latest = await gpmFetchLatestVersion();
   if (!latest) return;
 
   await gpmUpdSave({ latest, lastCheck: Date.now() });
@@ -148,6 +191,59 @@ Object.assign(handlers, {
   async updateDismiss({ version }) {
     await gpmUpdSave({ dismissed: version });
     return { ok: true };
+  },
+
+  /**
+   * One-click update: git pull via the native helper, then reload the
+   * extension so Chrome picks up the new files. Responds BEFORE reloading so
+   * the popup/banner can show feedback (reload kills all extension pages).
+   */
+  async updateNow() {
+    let res;
+    try {
+      res = await gpmNative("pull");
+    } catch (e) {
+      return {
+        ok: false,
+        helperMissing: gpmHostMissing(e),
+        error: String(e.message || e),
+      };
+    }
+    if (res.updated) {
+      await gpmUpdSave({ notified: null, dismissed: null });
+      setTimeout(() => chrome.runtime.reload(), 400); // let the reply land first
+      return { ok: true, updated: true };
+    }
+    return { ok: true, updated: false }; // already at origin/main
+  },
+
+  /**
+   * "View the new code": GitHub compare between the locally checked-out
+   * commit and main. Falls back to the commits page if the helper is missing.
+   */
+  async updateViewChanges() {
+    let url = `${GPM_UPD.REPO_URL}/commits/main`;
+    try {
+      const st = await gpmNative("status");
+      if (st.sha) url = `${GPM_UPD.REPO_URL}/compare/${st.sha}...main`;
+    } catch (_) {}
+    chrome.tabs.create({ url });
+    return { ok: true, url };
+  },
+
+  /** Is the native update helper installed? (Cheap probe for the popup.) */
+  async updateHelperStatus() {
+    try {
+      const st = await gpmNative("status");
+      return { ok: true, installed: true, sha: st.shortSha, dirty: st.dirty };
+    } catch (e) {
+      return {
+        ok: true,
+        installed: false,
+        helperMissing: gpmHostMissing(e),
+        error: String(e.message || e),
+      };
+    }
   },
 });
 
