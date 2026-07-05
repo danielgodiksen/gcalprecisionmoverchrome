@@ -185,6 +185,7 @@ async function onPanelClick(e) {
 
 let remDialog = null;
 let remTarget = null; // set when opened from an event bubble
+let remBackdropClose = false; // close on backdrop click? (configurable in the toolbar popup)
 
 /** Inject a Reminders button into GCal's own event popup, so reminders are
  *  added exactly where GCal's native notifications live.
@@ -266,7 +267,10 @@ async function openReminderDialog(target) {
   remDialog.className = "gpm-dialog";
   remDialog.innerHTML = `
     <div class="gpm-dialog__box">
-      <div class="gpm-dialog__title">Reminders</div>
+      <div class="gpm-dialog__head">
+        <div class="gpm-dialog__title">Reminders</div>
+        <button class="gpm-dialog__close" data-r="close" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
       <div class="gpm-dialog__section">
         <div class="gpm-dialog__label">Alert before start (minutes, comma-separated; 0 = at start)</div>
         <input type="text" data-r="leads" value="5,0">
@@ -292,9 +296,11 @@ async function openReminderDialog(target) {
   document.body.appendChild(remDialog);
 
   // Prefill from the notification defaults configured in the toolbar popup.
+  remBackdropClose = false;
   try {
     const { gpmNotifSettings: ns } = await browser.storage.local.get("gpmNotifSettings");
     if (ns) {
+      remBackdropClose = !!ns.dialogBackdropClose;
       if (ns.defLeads) remDialog.querySelector('[data-r="leads"]').value = ns.defLeads;
       if (ns.defFocusEvery != null)
         remDialog.querySelector('[data-r="focus"]').value = ns.defFocusEvery;
@@ -309,7 +315,12 @@ async function openReminderDialog(target) {
     : `Watch ${selection.size} selected event${selection.size === 1 ? "" : "s"}`;
 
   remDialog.addEventListener("click", async (e) => {
-    if (e.target === remDialog) return closeReminderDialog();
+    // Backdrop click only closes when the user opted in via the popup setting;
+    // otherwise the dialog closes only via the ✕ / Close buttons or Esc.
+    if (e.target === remDialog) {
+      if (remBackdropClose) closeReminderDialog();
+      return;
+    }
     const btn = e.target.closest("button");
     if (!btn) return;
     if (btn.dataset.r === "close") return closeReminderDialog();

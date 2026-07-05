@@ -113,6 +113,12 @@ $("open-gh").addEventListener("click", () => {
   window.close();
 });
 
+// Open the extension's options page (OAuth Client ID / sign-in setup).
+$("options").addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+  window.close();
+});
+
 $("skip").addEventListener("click", async () => {
   if (latestSeen) {
     try {
@@ -141,6 +147,7 @@ const NOTIF_DEFAULTS = {
   defFocusEvery: 0, // default focus-ping interval (0 = off)
   defFollowUp: false, // default "prompt follow-up when the event ends"
   defFollowUpMin: 30, // default follow-up block length
+  dialogBackdropClose: false, // close the reminders dialog by clicking its backdrop
 };
 
 async function loadSettings() {
@@ -161,6 +168,7 @@ function readForm() {
     defFocusEvery: Math.max(0, parseInt($("s-focus").value, 10) || 0),
     defFollowUp: $("s-fu").checked,
     defFollowUpMin: Math.max(5, parseInt($("s-fumin").value, 10) || 30),
+    dialogBackdropClose: $("s-backdrop").checked,
   };
 }
 
@@ -172,6 +180,7 @@ function fillForm(s) {
   $("s-focus").value = s.defFocusEvery;
   $("s-fu").checked = s.defFollowUp;
   $("s-fumin").value = s.defFollowUpMin;
+  $("s-backdrop").checked = s.dialogBackdropClose;
 }
 
 let savedTimer = null;
@@ -185,7 +194,7 @@ async function saveSettings() {
 
 (async () => {
   fillForm(await loadSettings());
-  for (const id of ["s-sound", "s-upd-notify", "s-upd-banner", "s-fu"]) {
+  for (const id of ["s-sound", "s-upd-notify", "s-upd-banner", "s-fu", "s-backdrop"]) {
     $(id).addEventListener("change", saveSettings);
   }
   for (const id of ["s-leads", "s-focus", "s-fumin"]) {

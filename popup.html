@@ -138,6 +138,15 @@
     Update banner inside Google Calendar
   </label>
 
+  <h2>Reminders dialog</h2>
+  <label class="toggle">
+    <input type="checkbox" id="s-backdrop" />
+    Close by clicking outside the dialog
+  </label>
+  <div class="muted" style="font-size: 11.5px;">
+    When off, the dialog closes only via the ✕ / Close buttons or Esc.
+  </div>
+
   <h2>Defaults for new reminders</h2>
   <div class="field">
     <label for="s-leads">Alert before start (minutes, comma-separated; 0 = at start)</label>
@@ -158,6 +167,14 @@
     Prompt for a follow-up when events end
   </label>
   <div id="saved">Saved ✓</div>
+
+  <h2>Setup</h2>
+  <div class="row">
+    <button id="options">OAuth settings…</button>
+  </div>
+  <div class="muted" style="font-size: 11.5px; margin-top: 4px;">
+    Google Cloud OAuth Client ID and sign-in.
+  </div>
 
   <script src="popup.js"></script>
 </body>
