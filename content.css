@@ -220,6 +220,12 @@
 
 .gpm-bubble-btn {
   display: block;
-  margin: 8px 16px 12px auto;
-  padding: 6px 12px;
+  box-sizing: border-box;
+  width: calc(100% - 32px);
+  margin: 4px 16px 14px;
+  padding: 7px 12px;
+  text-align: center;
+  flex: none;        /* don't stretch if the card lays children out with flex */
+  align-self: auto;
+  cursor: pointer;
 }

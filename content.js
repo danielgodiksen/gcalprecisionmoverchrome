@@ -187,7 +187,18 @@ let remDialog = null;
 let remTarget = null; // set when opened from an event bubble
 
 /** Inject a Reminders button into GCal's own event popup, so reminders are
- *  added exactly where GCal's native notifications live. */
+ *  added exactly where GCal's native notifications live.
+ *
+ *  Two gotchas with GCal's popup:
+ *  - The `role="dialog"` node is a positioning wrapper that can be wider than
+ *    the visible card (flex layout), so a child appended to it renders as a
+ *    stretched strip beside the card. Insert into the card itself: the
+ *    largest direct child of the dialog.
+ *  - GCal handles focus/close on `mousedown` at the document level and often
+ *    re-renders the popup before a `click` can fire on injected nodes. Act on
+ *    `pointerdown` and stop propagation so the popup neither closes nor eats
+ *    the interaction.
+ */
 function scanEventBubbles() {
   document.querySelectorAll('div[role="dialog"]').forEach((dlg) => {
     if (dlg.querySelector(".gpm-bubble-btn")) return;
@@ -196,16 +207,37 @@ function scanEventBubbles() {
     const raw = idEl.getAttribute("data-eventid");
     const ids = decodeEventId(raw);
     if (!ids) return;
+
+    // Find the visible card: the largest element child of the dialog wrapper.
+    let host = dlg;
+    const kids = [...dlg.children].filter(
+      (c) => c instanceof HTMLElement && !c.classList.contains("gpm-bubble-btn")
+    );
+    if (kids.length) {
+      host = kids.reduce((a, b) =>
+        b.offsetWidth * b.offsetHeight > a.offsetWidth * a.offsetHeight ? b : a
+      );
+    }
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "gpm-btn gpm-bubble-btn";
     btn.textContent = "🔔 Reminders";
-    btn.addEventListener("click", (e) => {
+    const open = (e) => {
       e.preventDefault();
       e.stopPropagation();
       openReminderDialog({ raw, eventId: ids.eventId, calendarId: ids.calendarId });
-    });
-    dlg.appendChild(btn);
+    };
+    // pointerdown fires before GCal's document-level mousedown handling can
+    // close/re-render the popup; keep the other handlers as inert guards.
+    btn.addEventListener("pointerdown", open);
+    for (const t of ["mousedown", "mouseup", "click"]) {
+      btn.addEventListener(t, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
+    host.appendChild(btn);
   });
 }
 
