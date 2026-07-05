@@ -30,10 +30,10 @@ const GPM_UPD = {
 };
 
 /** Talk to the local update helper. Rejects if it isn't installed. */
-function gpmNative(cmd) {
+function gpmNative(cmd, extra) {
   return new Promise((resolve, reject) => {
     try {
-      chrome.runtime.sendNativeMessage(GPM_UPD.NATIVE_HOST, { cmd }, (res) => {
+      chrome.runtime.sendNativeMessage(GPM_UPD.NATIVE_HOST, { cmd, ...(extra || {}) }, (res) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else if (!res || res.ok === false) {
@@ -50,6 +50,82 @@ function gpmNative(cmd) {
 
 function gpmHostMissing(e) {
   return /native messaging host|not found|forbidden/i.test(String(e && e.message));
+}
+
+/**
+ * Parse a GitHub URL into { owner, repo, ref, refType, label }.
+ *
+ * Understands the common link shapes GitHub's UI produces:
+ *   github.com/OWNER/REPO                         -> default branch
+ *   github.com/OWNER/REPO/tree/BRANCH[/path]      -> a branch
+ *   github.com/OWNER/REPO/tree/TAG                 -> a tag (treated as branch;
+ *                                                     the helper resolves either)
+ *   github.com/OWNER/REPO/commit(s)/SHA            -> a commit
+ *   github.com/OWNER/REPO/releases/tag/TAG         -> a tag
+ *   github.com/OWNER/REPO/blob/REF/path            -> whatever REF is
+ * Also accepts a bare "OWNER/REPO" and an optional ".git" suffix.
+ * Returns null if it isn't a GitHub link we can make sense of.
+ */
+function gpmParseGithubRef(input) {
+  let raw = String(input || "").trim();
+  if (!raw) return null;
+
+  // Allow a bare "owner/repo[/...]" without a scheme/host.
+  if (!/^https?:\/\//i.test(raw) && !/^github\.com/i.test(raw)) {
+    raw = "https://github.com/" + raw.replace(/^\/+/, "");
+  } else if (/^github\.com/i.test(raw)) {
+    raw = "https://" + raw;
+  }
+
+  let u;
+  try {
+    u = new URL(raw);
+  } catch (_) {
+    return null;
+  }
+  if (!/(^|\.)github\.com$/i.test(u.hostname)) return null;
+
+  const parts = u.pathname.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const owner = parts[0];
+  const repo = parts[1].replace(/\.git$/i, "");
+  const kind = (parts[2] || "").toLowerCase();
+
+  let ref = "";
+  let refType = "default";
+  let label = "default branch";
+
+  if (kind === "tree" || kind === "blob" || kind === "commits") {
+    // /tree/<ref>, /blob/<ref>/path, /commits/<branch> all name a branch/tag.
+    // (Branch names containing "/" are ambiguous vs. a subpath in these URLs,
+    // so we take the first segment — the common case. For a slash-named
+    // branch, paste "owner/repo/tree/<full/branch>" won't disambiguate; use a
+    // tag or commit link instead.)
+    ref = parts[3] || "";
+    refType = "branch";
+    label = ref ? `branch “${ref}”` : "default branch";
+  } else if (kind === "commit") {
+    ref = parts[3] || "";
+    if (ref) {
+      refType = "commit";
+      label = `commit ${ref.slice(0, 7)}`;
+    }
+  } else if (kind === "releases" && (parts[3] || "").toLowerCase() === "tag") {
+    ref = parts[4] || "";
+    refType = "tag";
+    label = ref ? `tag “${ref}”` : "default branch";
+  } else if (kind === "tag" || kind === "tags") {
+    ref = parts[3] || "";
+    refType = "tag";
+    label = ref ? `tag “${ref}”` : "default branch";
+  }
+
+  if (!ref) {
+    refType = "default";
+    label = "default branch";
+  }
+  return { owner, repo, ref, refType, label };
 }
 
 /** Compare dotted versions: 1 if a > b, -1 if a < b, 0 if equal. */
@@ -215,6 +291,63 @@ Object.assign(handlers, {
       return { ok: true, updated: true };
     }
     return { ok: true, updated: false }; // already at origin/main
+  },
+
+  /**
+   * Manual install from a pasted GitHub link. Parses the link, makes sure it
+   * points at THIS extension's repo (the field can only ever install our own
+   * code, just a different branch/tag/commit of it), checks that ref out via
+   * the native helper, then reloads so Chrome picks up the new files.
+   */
+  async updateFromLink({ url }) {
+    const parsed = gpmParseGithubRef(url);
+    if (!parsed) {
+      return {
+        ok: false,
+        error:
+          "That doesn't look like a GitHub link. Paste something like " +
+          "https://github.com/owner/repo/tree/branch",
+      };
+    }
+
+    // Only install from our own repo — reject links to other repos/forks.
+    const want = gpmParseGithubRef(GPM_UPD.REPO_URL);
+    if (
+      want &&
+      (parsed.owner.toLowerCase() !== want.owner.toLowerCase() ||
+        parsed.repo.toLowerCase() !== want.repo.toLowerCase())
+    ) {
+      return {
+        ok: false,
+        error: `That link points to ${parsed.owner}/${parsed.repo}, but this extension only installs from ${want.owner}/${want.repo}.`,
+      };
+    }
+
+    let res;
+    try {
+      res = await gpmNative("checkout_ref", {
+        ref: parsed.ref,
+        refType: parsed.refType,
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        helperMissing: gpmHostMissing(e),
+        error: String(e.message || e),
+      };
+    }
+
+    // Clear any pending "update available" flags for the auto-checker and
+    // reload the extension so the new files take effect.
+    await gpmUpdSave({ notified: null, dismissed: null });
+    setTimeout(() => chrome.runtime.reload(), 400); // let the reply land first
+    return {
+      ok: true,
+      updated: !!res.updated,
+      sha: res.shortSha || res.sha,
+      method: res.method,
+      label: parsed.label,
+    };
   },
 
   /**

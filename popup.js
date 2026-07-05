@@ -139,6 +139,73 @@ $("skip").addEventListener("click", async () => {
 })();
 
 // ---------------------------------------------------------------------------
+// Install from a pasted GitHub link (manual)
+// ---------------------------------------------------------------------------
+
+function setLinkStatus(text, cls) {
+  const el = $("link-status");
+  el.classList.remove("update", "error", "good");
+  if (cls) el.classList.add(cls);
+  el.textContent = text;
+}
+
+// Restore the last link typed, for convenience.
+chrome.storage.local
+  .get("gpmInstallLink")
+  .then(({ gpmInstallLink }) => {
+    if (gpmInstallLink) $("link-url").value = gpmInstallLink;
+  })
+  .catch(() => {});
+
+$("install-link").addEventListener("click", async () => {
+  const url = $("link-url").value.trim();
+  if (!url) {
+    setLinkStatus("Paste a GitHub link first.", "error");
+    return;
+  }
+  chrome.storage.local.set({ gpmInstallLink: url }).catch(() => {});
+
+  const btn = $("install-link");
+  btn.disabled = true;
+  setLinkStatus("Installing…", "update");
+  try {
+    const res = await bg({ type: "updateFromLink", url });
+    if (res.ok && res.updated) {
+      setLinkStatus(
+        `Installed ${res.label || "that version"} ✓ — reloading extension…`,
+        "good"
+      );
+      return; // popup dies with the reload; that's expected
+    }
+    if (res.ok && !res.updated) {
+      setLinkStatus(
+        `Already on ${res.label || "that version"} — nothing to install.`,
+        "good"
+      );
+      return;
+    }
+    if (res.helperMissing) {
+      setLinkStatus("Update helper not installed yet (one-time setup).", "error");
+      $("setup").classList.remove("hidden");
+    } else {
+      setLinkStatus(res.error || "Install failed.", "error");
+    }
+  } catch (e) {
+    setLinkStatus(String(e.message || e), "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Enter in the field triggers the install.
+$("link-url").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $("install-link").click();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Notification settings (auto-saved to chrome.storage.local as gpmNotifSettings)
 // ---------------------------------------------------------------------------
 

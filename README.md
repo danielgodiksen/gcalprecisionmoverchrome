@@ -156,3 +156,14 @@ inside this folder and refuses to touch uncommitted local changes.
 "View new code" in the popup opens a GitHub diff of exactly what would change.
 
 To remove it: `bash native-host/install.sh --uninstall`.
+
+**Install from a pasted link** (manual): the popup has an "Install from a link"
+field. Paste any GitHub link to this repo — the repo root, or a
+`/tree/<branch>`, `/releases/tag/<tag>`, or `/commit/<sha>` link — click
+**Install from link**, and the extension checks that exact ref out and reloads
+itself. It fast-forwards when the ref is ahead, and hard-resets to the ref
+otherwise (so you can pin an older version or switch to a branch/fork commit);
+either way it still refuses to clobber uncommitted local changes. The link must
+point at this same repo (`danielgodiksen/gcalprecisionmoverchrome`) — links to
+other repos are rejected. This reuses the same one-time helper as "Update now",
+so run `native-host/install.sh` first if you haven't.

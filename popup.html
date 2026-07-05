@@ -56,6 +56,11 @@
     }
     #status.good { color: #81c995; }
 
+    #link-status { margin-top: 8px; min-height: 16px; font-weight: 400; }
+    #link-status.update { color: #8ab4f8; }
+    #link-status.error { color: #f28b82; }
+    #link-status.good { color: #81c995; }
+
     /* Settings */
     .toggle {
       display: flex;
@@ -123,6 +128,17 @@
       <button id="open-gh">Open GitHub instead</button>
     </div>
   </div>
+
+  <h2>Install from a link</h2>
+  <div class="field">
+    <label for="link-url">Paste a GitHub link — a branch, tag, commit, or the repo</label>
+    <input type="text" id="link-url"
+           placeholder="https://github.com/danielgodiksen/gcalprecisionmoverchrome/tree/main" />
+  </div>
+  <div class="row">
+    <button id="install-link" class="primary">Install from link</button>
+  </div>
+  <div id="link-status" class="muted"></div>
 
   <h2>Notifications</h2>
   <label class="toggle">
