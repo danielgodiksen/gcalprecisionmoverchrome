@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      width: 260px;
+      margin: 0;
+      padding: 14px;
+      background: #202124;
+      color: #e8eaed;
+      font: 500 13px/1.5 Roboto, Arial, sans-serif;
+    }
+    h1 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+    .muted { color: #9aa0a6; font-size: 12px; font-weight: 400; }
+    #status { margin: 10px 0; min-height: 18px; }
+    #status.update { color: #8ab4f8; }
+    #status.error { color: #f28b82; }
+    .row { display: flex; gap: 8px; }
+    button {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #5f6368;
+      border-radius: 6px;
+      background: transparent;
+      color: #e8eaed;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(232, 234, 237, 0.1); }
+    button.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+    button.primary:hover { background: #1967d2; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .hidden { display: none; }
+    #footer { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>GCal Precision Mover</h1>
+  <div class="muted">Installed version: <span id="current">…</span></div>
+  <div id="status" class="muted"></div>
+  <div class="row">
+    <button id="check" class="primary">Check for updates</button>
+    <button id="open" class="hidden">Open GitHub</button>
+  </div>
+  <div id="footer" class="row hidden">
+    <button id="skip">Skip this version</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

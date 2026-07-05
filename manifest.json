@@ -33,6 +33,14 @@
       "run_at": "document_idle"
     }
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GCal Precision Mover — check for updates",
+    "default_icon": {
+      "48": "icons/icon48.png",
+      "96": "icons/icon96.png"
+    }
+  },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true

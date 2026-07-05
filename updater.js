@@ -116,7 +116,20 @@ Object.assign(handlers, {
       !!fresh.latest &&
       gpmCmpVer(fresh.latest, current) > 0 &&
       fresh.dismissed !== fresh.latest;
-    return { ok: true, updateAvailable, latest: fresh.latest, current, url: GPM_UPD.REPO_URL };
+    return {
+      ok: true,
+      updateAvailable,
+      latest: fresh.latest,
+      current,
+      lastCheck: fresh.lastCheck,
+      url: GPM_UPD.REPO_URL,
+    };
+  },
+
+  /** Manual check from the toolbar popup: always hits GitHub. */
+  async updateCheckNow() {
+    await gpmCheckForUpdate();
+    return handlers.updateStatus();
   },
 
   /** "Skip this version" from the in-page banner. */
