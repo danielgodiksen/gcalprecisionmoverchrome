@@ -96,11 +96,25 @@ def cmd_pull():
     }
 
 
+def log_crash(exc):
+    """Chrome swallows the host's stderr — keep a breadcrumb on disk."""
+    try:
+        import datetime
+        import traceback
+        with open("/tmp/gpm-native-host.log", "a") as f:
+            f.write("[%s] %s\n" % (datetime.datetime.now(),
+                                   "".join(traceback.format_exception(
+                                       type(exc), exc, exc.__traceback__))))
+    except Exception:
+        pass
+
+
 def main():
     while True:
         try:
             msg = read_message()
-        except Exception:
+        except Exception as e:
+            log_crash(e)
             return
         if msg is None:
             return

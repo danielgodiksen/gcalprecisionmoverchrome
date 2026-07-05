@@ -13,6 +13,9 @@ HOST_NAME="com.danielgodiksen.gpm_updater"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$DIR")"
 HOST_SCRIPT="$DIR/gpm_native_host.py"
+# Chrome starts the host with a bare environment (no shell profile, minimal
+# PATH), so we register a bash launcher that finds a working python3 itself.
+LAUNCHER="$DIR/gpm_host_launcher.sh"
 
 case "$(uname -s)" in
   Darwin)
@@ -58,7 +61,7 @@ print("".join(chr(ord("a") + int(c, 16)) for c in h))
 PY
 )"
 
-chmod +x "$HOST_SCRIPT"
+chmod +x "$HOST_SCRIPT" "$LAUNCHER"
 
 INSTALLED=0
 for t in "${TARGETS[@]}"; do
@@ -69,7 +72,7 @@ for t in "${TARGETS[@]}"; do
 {
   "name": "$HOST_NAME",
   "description": "GCal Precision Mover update helper (git pull)",
-  "path": "$HOST_SCRIPT",
+  "path": "$LAUNCHER",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://$EXT_ID/"]
 }
