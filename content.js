@@ -768,3 +768,52 @@ document.addEventListener(
     );
   }
 })();
+
+// ---------------------------------------------------------------------------
+// Update banner: background checks GitHub for a newer version; if one exists
+// (and wasn't skipped), show a dismissible banner with an "Open GitHub" link.
+// ---------------------------------------------------------------------------
+
+(async () => {
+  let st;
+  try {
+    st = await bg({ type: "updateStatus" });
+  } catch (_) {
+    return; // background not ready / check failed — stay quiet
+  }
+  if (!st || !st.updateAvailable) return;
+
+  const bar = document.createElement("div");
+  bar.className = "gpm-update-banner";
+
+  const text = document.createElement("span");
+  text.className = "gpm-update-banner__text";
+  text.textContent = `GCal Precision Mover ${st.latest} is available on GitHub (you have ${st.current}). Update?`;
+
+  const openBtn = document.createElement("button");
+  openBtn.className = "gpm-update-banner__btn gpm-update-banner__btn--primary";
+  openBtn.textContent = "Open GitHub";
+  openBtn.addEventListener("click", () => {
+    window.open(st.url, "_blank", "noopener");
+    bar.remove();
+  });
+
+  const skipBtn = document.createElement("button");
+  skipBtn.className = "gpm-update-banner__btn";
+  skipBtn.textContent = "Skip this version";
+  skipBtn.addEventListener("click", async () => {
+    bar.remove();
+    try {
+      await bg({ type: "updateDismiss", version: st.latest });
+    } catch (_) {}
+  });
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "gpm-update-banner__close";
+  closeBtn.textContent = "×";
+  closeBtn.title = "Dismiss (asks again next session)";
+  closeBtn.addEventListener("click", () => bar.remove());
+
+  bar.append(text, openBtn, skipBtn, closeBtn);
+  document.body.appendChild(bar);
+})();

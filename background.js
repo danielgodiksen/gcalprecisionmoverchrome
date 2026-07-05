@@ -460,3 +460,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // Reminder engine (shares this global scope; must load after handlers exist).
 importScripts("reminders.js");
+
+// GitHub update checker (shares this global scope; extends `handlers`).
+importScripts("updater.js");

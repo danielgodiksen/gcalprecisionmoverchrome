@@ -229,3 +229,47 @@
   align-self: auto;
   cursor: pointer;
 }
+
+/* --- Update banner (new version on GitHub) --- */
+.gpm-update-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #202124;
+  color: #e8eaed;
+  font: 500 13px/1.4 Roboto, Arial, sans-serif;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.gpm-update-banner__btn {
+  padding: 5px 12px;
+  border: 1px solid #5f6368;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8eaed;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gpm-update-banner__btn:hover { background: rgba(232, 234, 237, 0.1); }
+.gpm-update-banner__btn--primary {
+  background: #1a73e8;
+  border-color: #1a73e8;
+  color: #fff;
+}
+.gpm-update-banner__btn--primary:hover { background: #1967d2; }
+.gpm-update-banner__close {
+  border: none;
+  background: transparent;
+  color: #9aa0a6;
+  font: 600 16px/1 Roboto, Arial, sans-serif;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.gpm-update-banner__close:hover { color: #e8eaed; }
