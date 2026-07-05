@@ -6,7 +6,10 @@ const $ = (id) => document.getElementById(id);
 
 async function bg(msg) {
   const res = await chrome.runtime.sendMessage(msg);
-  if (res && res.error) throw new Error(res.error);
+  // Only treat `error` as fatal for router-level failures ({ error } with no
+  // `ok`). Handlers return structured results like { ok: false, helperMissing,
+  // error } that callers must inspect (e.g. to show setup instructions).
+  if (res && res.error && res.ok === undefined) throw new Error(res.error);
   return res;
 }
 

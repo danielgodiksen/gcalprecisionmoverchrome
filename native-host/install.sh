@@ -21,12 +21,19 @@ case "$(uname -s)" in
       "$HOME/Library/Application Support/Google/Chrome Beta/NativeMessagingHosts"
       "$HOME/Library/Application Support/Google/Chrome Canary/NativeMessagingHosts"
       "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
+      "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Arc/User Data/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Vivaldi/NativeMessagingHosts"
     )
     ;;
   Linux)
     TARGETS=(
       "$HOME/.config/google-chrome/NativeMessagingHosts"
       "$HOME/.config/chromium/NativeMessagingHosts"
+      "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+      "$HOME/.config/microsoft-edge/NativeMessagingHosts"
+      "$HOME/.config/vivaldi/NativeMessagingHosts"
     )
     ;;
   *)

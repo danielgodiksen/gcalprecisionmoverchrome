@@ -61,7 +61,10 @@ function findChip(target) {
 
 async function bg(msg) {
   const res = await browser.runtime.sendMessage(msg);
-  if (res && res.error) throw new Error(res.error);
+  // Only treat `error` as fatal for router-level failures ({ error } with no
+  // `ok`). Handlers return structured results like { ok: false, helperMissing,
+  // error } that callers must inspect (e.g. the update banner's setup hint).
+  if (res && res.error && res.ok === undefined) throw new Error(res.error);
   return res;
 }
 
