@@ -218,16 +218,42 @@
 .gpm-resizing { cursor: ns-resize !important; }
 [data-eventid]:hover { /* subtle hint that edges are grabbable with Alt */ }
 
+/* Small round icon button that extends GCal's popup action toolbar */
 .gpm-bubble-btn {
-  display: block;
   box-sizing: border-box;
-  width: calc(100% - 32px);
-  margin: 4px 16px 14px;
-  padding: 7px 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 15px;
+  line-height: 32px;
   text-align: center;
-  flex: none;        /* don't stretch if the card lays children out with flex */
-  align-self: auto;
   cursor: pointer;
+  flex: none;
+  align-self: center;
+  vertical-align: middle;
+}
+.gpm-bubble-btn:hover {
+  background: rgba(60, 64, 67, 0.1);
+}
+.gpm-bubble-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+}
+
+/* Fallback when the toolbar row can't be found: small inline button */
+.gpm-bubble-btn--fallback {
+  width: auto;
+  height: auto;
+  margin: 4px 16px 12px;
+  padding: 5px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 16px;
+  font: 500 12px Roboto, Arial, sans-serif;
+  color: #3c4043;
+  line-height: 1.4;
+  background: #fff;
 }
 
 /* --- Update banner (new version on GitHub) --- */

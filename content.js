@@ -208,21 +208,12 @@ function scanEventBubbles() {
     const ids = decodeEventId(raw);
     if (!ids) return;
 
-    // Find the visible card: the largest element child of the dialog wrapper.
-    let host = dlg;
-    const kids = [...dlg.children].filter(
-      (c) => c instanceof HTMLElement && !c.classList.contains("gpm-bubble-btn")
-    );
-    if (kids.length) {
-      host = kids.reduce((a, b) =>
-        b.offsetWidth * b.offsetHeight > a.offsetWidth * a.offsetHeight ? b : a
-      );
-    }
-
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "gpm-btn gpm-bubble-btn";
-    btn.textContent = "🔔 Reminders";
+    btn.className = "gpm-bubble-btn";
+    btn.textContent = "🔔";
+    btn.title = "Reminders (GCal Precision Mover)";
+    btn.setAttribute("aria-label", "Reminders");
     const open = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -237,7 +228,34 @@ function scanEventBubbles() {
         e.stopPropagation();
       });
     }
-    host.appendChild(btn);
+
+    // Extend GCal's own action toolbar (pencil / trash / mail / kebab / X):
+    // it's the row of buttons at the very top of the popup. Insert the bell
+    // just before the close button's wrapper so it reads as a native action.
+    const dlgRect = dlg.getBoundingClientRect();
+    const headBtns = [...dlg.querySelectorAll("button")].filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.top - dlgRect.top < 64;
+    });
+    if (headBtns.length) {
+      const anchor = headBtns[headBtns.length - 1]; // rightmost = close (X)
+      // Climb from the close button to its top-level wrapper inside the
+      // toolbar row (the row is the first ancestor holding several buttons).
+      let node = anchor;
+      while (
+        node.parentElement &&
+        node.parentElement !== dlg &&
+        node.parentElement.querySelectorAll("button").length < 2
+      ) {
+        node = node.parentElement;
+      }
+      node.parentElement.insertBefore(btn, node);
+    } else {
+      // Fallback: small inline button at the end of the popup content.
+      btn.classList.add("gpm-bubble-btn--fallback");
+      btn.textContent = "🔔 Reminders";
+      (dlg.firstElementChild || dlg).appendChild(btn);
+    }
   });
 }
 
