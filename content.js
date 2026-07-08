@@ -221,20 +221,55 @@ let remBackdropClose = false; // close on backdrop click? (configurable in the t
  *    `pointerdown` and stop propagation so the popup neither closes nor eats
  *    the interaction.
  */
+
+// Debug tracing for the bubble scanner: run
+//   localStorage.gpmDebug = "1"
+// in the Calendar tab's console to see why a popup was skipped.
+function bubbleDebug(...args) {
+  try {
+    if (localStorage.getItem("gpmDebug")) console.debug("[GPM bubble]", ...args);
+  } catch (_) {}
+}
+
+// Decorated popups re-render after they open (e.g. when the illustration
+// image finishes loading), which throws away the injected bell — and by then
+// the last-activated chip can be older than its freshness window, so the
+// scanner used to bail forever. Remember which event each dialog belongs to;
+// the popup title guards against GCal recycling the dialog node for a
+// different event.
+const dlgIdMap = new WeakMap(); // dialog el -> { raw, eventId, calendarId, title }
+
+function dialogTitle(dlg) {
+  const h = dlg.querySelector('[role="heading"], h1, h2, h3');
+  return h ? h.textContent.trim() : "";
+}
+
 function scanEventBubbles() {
-  document.querySelectorAll('div[role="dialog"]').forEach((dlg) => {
+  document.querySelectorAll('[role="dialog"]').forEach((dlg) => {
     if (dlg.querySelector(".gpm-bubble-btn")) return;
     const idEl = dlg.closest("[data-eventid]") || dlg.querySelector("[data-eventid]");
     let raw = idEl && idEl.getAttribute("data-eventid");
     let ids = raw ? decodeEventId(raw) : null;
     let viaFallback = false;
+    const title = dialogTitle(dlg);
     if (!ids) {
-      // Decorated popups (illustration headers etc.) expose no data-eventid;
-      // fall back to the chip the user just activated to open this popup.
-      if (!lastChip || Date.now() - lastChip.t > 4000) return;
-      raw = lastChip.raw;
-      ids = { eventId: lastChip.eventId, calendarId: lastChip.calendarId };
-      viaFallback = true;
+      const stored = dlgIdMap.get(dlg);
+      if (stored && title && stored.title === title) {
+        // Same dialog re-rendered (decorated cards do this when the
+        // illustration loads): reuse the identity captured at injection time.
+        ({ raw } = stored);
+        ids = { eventId: stored.eventId, calendarId: stored.calendarId };
+        viaFallback = true;
+      } else if (lastChip && Date.now() - lastChip.t <= 4000) {
+        // Decorated popups (illustration headers etc.) expose no
+        // data-eventid; fall back to the chip just activated to open this.
+        raw = lastChip.raw;
+        ids = { eventId: lastChip.eventId, calendarId: lastChip.calendarId };
+        viaFallback = true;
+      } else {
+        bubbleDebug("skip: no data-eventid and no fresh chip", dlg);
+        return;
+      }
     }
 
     const btn = document.createElement("button");
@@ -266,23 +301,34 @@ function scanEventBubbles() {
     // <button>s, and the role=dialog node is a positioning wrapper that can
     // be bigger than the visible card — so measure "top of the popup" from
     // the card (the dialog's largest direct child), not the wrapper.
-    let cardTop = dlg.getBoundingClientRect().top;
+    let card = dlg;
     let cardArea = 0;
     for (const child of dlg.children) {
       const r = child.getBoundingClientRect();
       if (r.width * r.height > cardArea) {
         cardArea = r.width * r.height;
-        cardTop = r.top;
+        card = child;
       }
     }
+    const cardRect = card.getBoundingClientRect();
     const headBtns = [...dlg.querySelectorAll('button, [role="button"]')].filter((b) => {
       const r = b.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && r.top - cardTop < 64;
+      return r.width > 0 && r.height > 0 && r.top - cardRect.top < 64;
     });
     // Identified via the last-clicked chip only: without a top toolbar row
     // this dialog probably isn't an event popup (e.g. a delete-recurring
     // confirmation that opened moments after the chip click) — stay out.
-    if (viaFallback && !headBtns.length) return;
+    if (viaFallback && !headBtns.length) {
+      bubbleDebug("skip: fallback identity but no toolbar row", dlg);
+      return;
+    }
+
+    const injectInline = () => {
+      btn.classList.add("gpm-bubble-btn--fallback");
+      btn.textContent = "🔔 Reminders";
+      card.appendChild(btn);
+    };
+
     if (headBtns.length) {
       const anchor = headBtns[headBtns.length - 1]; // rightmost = close (X)
       // Climb from the close button to its top-level wrapper inside the
@@ -296,12 +342,31 @@ function scanEventBubbles() {
         node = node.parentElement;
       }
       node.parentElement.insertBefore(btn, node);
+      // Decorated toolbars can position their icons absolutely, collapsing a
+      // statically inserted sibling to nothing. If the bell didn't get real,
+      // on-card geometry, pull it out and use the inline placement instead.
+      const r = btn.getBoundingClientRect();
+      const visible =
+        r.width > 0 &&
+        r.height > 0 &&
+        r.right > cardRect.left &&
+        r.left < cardRect.right &&
+        r.bottom > cardRect.top &&
+        r.top < cardRect.bottom;
+      if (!visible) {
+        bubbleDebug("toolbar insert not visible, using inline fallback", r, cardRect);
+        btn.remove();
+        injectInline();
+      }
     } else {
       // Fallback: small inline button at the end of the popup content.
-      btn.classList.add("gpm-bubble-btn--fallback");
-      btn.textContent = "🔔 Reminders";
-      (dlg.firstElementChild || dlg).appendChild(btn);
+      injectInline();
     }
+
+    // Only after a successful injection do we know this dialog is an event
+    // popup — safe to remember its identity for post-re-render re-injection.
+    dlgIdMap.set(dlg, { raw, eventId: ids.eventId, calendarId: ids.calendarId, title });
+    bubbleDebug("injected", { title, viaFallback, eventId: ids.eventId });
   });
 }
 
