@@ -55,6 +55,18 @@ function findChip(target) {
   return { el, ...ids, raw: el.getAttribute("data-eventid") };
 }
 
+// The last event chip the user interacted with (mouse or keyboard). Some of
+// GCal's newer event popups (e.g. the "decorated" cards with an illustration
+// header) don't carry data-eventid anywhere inside the dialog, so the bubble
+// scanner falls back to the chip that was just activated to open it.
+let lastChip = null; // { raw, eventId, calendarId, t }
+function rememberChip(target) {
+  const chip = findChip(target);
+  if (chip) {
+    lastChip = { raw: chip.raw, eventId: chip.eventId, calendarId: chip.calendarId, t: Date.now() };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Messaging helpers
 // ---------------------------------------------------------------------------
@@ -212,11 +224,18 @@ let remBackdropClose = false; // close on backdrop click? (configurable in the t
 function scanEventBubbles() {
   document.querySelectorAll('div[role="dialog"]').forEach((dlg) => {
     if (dlg.querySelector(".gpm-bubble-btn")) return;
-    const idEl = dlg.hasAttribute("data-eventid") ? dlg : dlg.querySelector("[data-eventid]");
-    if (!idEl) return;
-    const raw = idEl.getAttribute("data-eventid");
-    const ids = decodeEventId(raw);
-    if (!ids) return;
+    const idEl = dlg.closest("[data-eventid]") || dlg.querySelector("[data-eventid]");
+    let raw = idEl && idEl.getAttribute("data-eventid");
+    let ids = raw ? decodeEventId(raw) : null;
+    let viaFallback = false;
+    if (!ids) {
+      // Decorated popups (illustration headers etc.) expose no data-eventid;
+      // fall back to the chip the user just activated to open this popup.
+      if (!lastChip || Date.now() - lastChip.t > 4000) return;
+      raw = lastChip.raw;
+      ids = { eventId: lastChip.eventId, calendarId: lastChip.calendarId };
+      viaFallback = true;
+    }
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -247,6 +266,10 @@ function scanEventBubbles() {
       const r = b.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && r.top - dlgRect.top < 64;
     });
+    // Identified via the last-clicked chip only: without a top toolbar row
+    // this dialog probably isn't an event popup (e.g. a delete-recurring
+    // confirmation that opened moments after the chip click) — stay out.
+    if (viaFallback && !headBtns.length) return;
     if (headBtns.length) {
       const anchor = headBtns[headBtns.length - 1]; // rightmost = close (X)
       // Climb from the close button to its top-level wrapper inside the
@@ -769,6 +792,7 @@ function cancelDrag() {
 // Named handlers so gpmTeardown() can detach them when a newer copy of this
 // script is injected after an extension update.
 function onGlobalMouseDown(e) {
+  rememberChip(e.target); // feeds the bubble scanner's fallback
   if (!e.altKey || e.button !== 0) return;
   const chip = findChip(e.target);
   if (!chip) return;
@@ -789,6 +813,9 @@ function onGlobalClick(e) {
 document.addEventListener("click", onGlobalClick, true);
 
 function onGlobalKeyDown(e) {
+  // Popups can also be opened from the keyboard (Enter/Space on a focused
+  // chip) — feed the bubble scanner's fallback for that path too.
+  if (e.key === "Enter" || e.key === " ") rememberChip(e.target);
   if (e.key === "Escape") {
     if (remDialog) {
       closeReminderDialog();
