@@ -261,10 +261,23 @@ function scanEventBubbles() {
     // Extend GCal's own action toolbar (pencil / trash / mail / kebab / X):
     // it's the row of buttons at the very top of the popup. Insert the bell
     // just before the close button's wrapper so it reads as a native action.
-    const dlgRect = dlg.getBoundingClientRect();
-    const headBtns = [...dlg.querySelectorAll("button")].filter((b) => {
+    // Decorated cards (illustration / background-image headers) need extra
+    // care: their toolbar icons can be div[role=button] rather than real
+    // <button>s, and the role=dialog node is a positioning wrapper that can
+    // be bigger than the visible card — so measure "top of the popup" from
+    // the card (the dialog's largest direct child), not the wrapper.
+    let cardTop = dlg.getBoundingClientRect().top;
+    let cardArea = 0;
+    for (const child of dlg.children) {
+      const r = child.getBoundingClientRect();
+      if (r.width * r.height > cardArea) {
+        cardArea = r.width * r.height;
+        cardTop = r.top;
+      }
+    }
+    const headBtns = [...dlg.querySelectorAll('button, [role="button"]')].filter((b) => {
       const r = b.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && r.top - dlgRect.top < 64;
+      return r.width > 0 && r.height > 0 && r.top - cardTop < 64;
     });
     // Identified via the last-clicked chip only: without a top toolbar row
     // this dialog probably isn't an event popup (e.g. a delete-recurring
@@ -278,7 +291,7 @@ function scanEventBubbles() {
       while (
         node.parentElement &&
         node.parentElement !== dlg &&
-        node.parentElement.querySelectorAll("button").length < 2
+        node.parentElement.querySelectorAll('button, [role="button"]').length < 2
       ) {
         node = node.parentElement;
       }
