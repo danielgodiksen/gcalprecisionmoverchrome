@@ -155,6 +155,15 @@ that Chrome launches on demand. It only runs `git fetch` + `git merge --ff-only`
 inside this folder and refuses to touch uncommitted local changes.
 "View new code" in the popup opens a GitHub diff of exactly what would change.
 
+The helper is installed to `~/Library/Application Support/GCalPrecisionMover`
+(macOS) rather than run from inside this folder: macOS treats Documents,
+Desktop and Downloads as permission-gated, and a browser without that grant
+kills a host script placed there before it can even reply ("Native host has
+exited"). If "Update now" reports a folder-permission error, allow
+**Documents Folder** for your browser under System Settings → Privacy &
+Security → Files & Folders. If you saw "Native host has exited" with an older
+install, just re-run `bash native-host/install.sh` once.
+
 To remove it: `bash native-host/install.sh --uninstall`.
 
 **Install from a pasted link** (manual): the popup has an "Install from a link"

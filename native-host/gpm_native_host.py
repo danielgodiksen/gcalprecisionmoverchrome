@@ -13,8 +13,10 @@ Commands (JSON over Chrome's native messaging protocol):
        (fast-forward when possible, hard reset otherwise). Powers the popup's
        "install from a pasted GitHub link" field.
 
-The repo path is derived from this script's location (it lives in
-<repo>/native-host/), so cloning the repo anywhere just works.
+The repo path comes from $GPM_REPO (set by the launcher, which install.sh
+copies outside the repo together with this script). When run straight from
+<repo>/native-host/ without the env var, it's derived from this script's
+location, so cloning the repo anywhere just works.
 """
 
 import json
@@ -23,7 +25,30 @@ import struct
 import subprocess
 import sys
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.environ.get("GPM_REPO") or os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))
+
+# macOS TCC: Documents/Desktop/Downloads are permission-gated per app. The
+# browser (not the user's shell) is the process charged for our git commands,
+# so git fails with EPERM until the browser is granted folder access.
+_PERM_HINT = (
+    "  The browser likely lacks access to the extension folder: open "
+    "System Settings > Privacy & Security > Files & Folders, allow "
+    "'Documents Folder' for your browser, then try again."
+)
+
+
+def git_error(prefix, res=None):
+    """Build an {ok: false} reply from a failed git result, with a macOS
+    folder-permission hint when the failure looks TCC-shaped."""
+    detail = ""
+    if res is not None:
+        detail = (res.stderr or res.stdout or "").strip()[:300]
+    msg = prefix + (": " + detail if detail else "")
+    low = detail.lower()
+    if "operation not permitted" in low or "permission denied" in low:
+        msg += _PERM_HINT
+    return {"ok": False, "error": msg}
 
 
 def read_message():
@@ -51,7 +76,7 @@ def git(*args, timeout=60):
 def cmd_status():
     sha = git("rev-parse", "HEAD")
     if sha.returncode != 0:
-        return {"ok": False, "error": "Not a git repository: " + REPO}
+        return git_error("Cannot read the git repo at " + REPO, sha)
     branch = git("rev-parse", "--abbrev-ref", "HEAD")
     dirty = git("status", "--porcelain")
     head = sha.stdout.strip()
@@ -68,7 +93,7 @@ def cmd_status():
 def cmd_pull():
     before = git("rev-parse", "HEAD")
     if before.returncode != 0:
-        return {"ok": False, "error": "Not a git repository: " + REPO}
+        return git_error("Cannot read the git repo at " + REPO, before)
 
     # Refuse to clobber uncommitted local edits.
     dirty = git("status", "--porcelain").stdout.strip()
@@ -81,8 +106,7 @@ def cmd_pull():
 
     fetch = git("fetch", "origin", "main", timeout=120)
     if fetch.returncode != 0:
-        return {"ok": False,
-                "error": "git fetch failed: " + fetch.stderr.strip()[:400]}
+        return git_error("git fetch failed", fetch)
 
     merge = git("merge", "--ff-only", "origin/main")
     if merge.returncode != 0:
@@ -122,7 +146,7 @@ def cmd_checkout_ref(ref, ref_type):
     """
     before = git("rev-parse", "HEAD")
     if before.returncode != 0:
-        return {"ok": False, "error": "Not a git repository: " + REPO}
+        return git_error("Cannot read the git repo at " + REPO, before)
 
     # Refuse to clobber uncommitted local edits (same guard as `pull`).
     if git("status", "--porcelain").stdout.strip():
@@ -135,8 +159,7 @@ def cmd_checkout_ref(ref, ref_type):
     # Pull down every branch + tag from origin so any reachable ref resolves.
     fetch = git("fetch", "origin", "--tags", "--prune", timeout=120)
     if fetch.returncode != 0:
-        return {"ok": False,
-                "error": "git fetch failed: " + fetch.stderr.strip()[:400]}
+        return git_error("git fetch failed", fetch)
 
     ref = (ref or "").strip()
     ref_type = (ref_type or "default").strip()
@@ -187,8 +210,7 @@ def cmd_checkout_ref(ref, ref_type):
         if not can_ff:
             reset = git("reset", "--hard", target_sha)
             if reset.returncode != 0:
-                return {"ok": False,
-                        "error": "git reset failed: " + reset.stderr.strip()[:400]}
+                return git_error("git reset failed", reset)
             method = "reset"
 
     after = git("rev-parse", "HEAD").stdout.strip()

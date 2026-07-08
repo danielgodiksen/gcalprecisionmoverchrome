@@ -35,7 +35,19 @@ function gpmNative(cmd, extra) {
     try {
       chrome.runtime.sendNativeMessage(GPM_UPD.NATIVE_HOST, { cmd, ...(extra || {}) }, (res) => {
         if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
+          let m = chrome.runtime.lastError.message || "";
+          // Pre-1.6.6 installs registered the helper inside the repo folder;
+          // on macOS the browser may not be allowed to read ~/Documents at
+          // all, killing the host before it can even reply. Re-running
+          // install.sh moves the helper somewhere the browser can always run.
+          if (/native host has exited/i.test(m)) {
+            m =
+              "The update helper crashed before replying — usually macOS " +
+              "blocking the browser from the Documents folder. Re-run " +
+              "`bash native-host/install.sh` in the extension folder, then " +
+              "try again (details: /tmp/gpm-native-host.log).";
+          }
+          reject(new Error(m));
         } else if (!res || res.ok === false) {
           reject(new Error((res && res.error) || "Update helper failed."));
         } else {
