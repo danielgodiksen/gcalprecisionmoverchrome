@@ -48,11 +48,30 @@ function decodeEventId(raw) {
 }
 
 function findChip(target) {
-  const el = target instanceof Element ? target.closest("[data-eventid]") : null;
+  let el = target instanceof Element ? target.closest("[data-eventid]") : null;
   if (!el) return null;
+  // GCal nests helper nodes that repeat the chip's data-eventid inside it
+  // (e.g. the focus/resize-handle pill on a selected chip). Grabbing one of
+  // those would make us measure/drag the pill instead of the event — climb to
+  // the outermost node carrying the same id.
+  for (
+    let outer = el.parentElement && el.parentElement.closest("[data-eventid]");
+    outer && outer.getAttribute("data-eventid") === el.getAttribute("data-eventid");
+    outer = outer.parentElement && outer.parentElement.closest("[data-eventid]")
+  ) {
+    el = outer;
+  }
   const ids = decodeEventId(el.getAttribute("data-eventid"));
   if (!ids) return null;
   return { el, ...ids, raw: el.getAttribute("data-eventid") };
+}
+
+/** Drop elements that sit inside another element of the same list. Transforms
+ *  compound through the DOM: translating both a chip and a node nested inside
+ *  it moves the inner one twice as far (that's GCal's resize-handle pill
+ *  "flying away" on big moves). Only ever transform the outermost nodes. */
+function outermostOnly(els) {
+  return els.filter((el) => !els.some((other) => other !== el && other.contains(el)));
 }
 
 // The last event chip the user interacted with (mouse or keyboard). Some of
@@ -110,9 +129,9 @@ function remarkSelection() {
     if (!selection.has(el.getAttribute("data-eventid"))) el.classList.remove("gpm-selected");
   });
   for (const raw of selection.keys()) {
-    document
-      .querySelectorAll(`[data-eventid="${CSS.escape(raw)}"]`)
-      .forEach((el) => el.classList.add("gpm-selected"));
+    outermostOnly([
+      ...document.querySelectorAll(`[data-eventid="${CSS.escape(raw)}"]`),
+    ]).forEach((el) => el.classList.add("gpm-selected"));
   }
 }
 
@@ -604,14 +623,14 @@ const gpmVisualsTimer = setInterval(() => {
 function applyOptimisticShift(raw, deltaMin) {
   if (Math.abs(deltaMin) >= 1440) return; // day-sized jumps don't map to translateY
   const els = [];
-  document
-    .querySelectorAll(`[data-eventid="${CSS.escape(raw)}"]`)
-    .forEach((el) => {
-      const ppm = pxPerMinuteFor(el);
-      if (!ppm) return; // month view / all-day row
-      el.style.transform = `translateY(${deltaMin * ppm}px)`;
-      els.push(el);
-    });
+  outermostOnly([
+    ...document.querySelectorAll(`[data-eventid="${CSS.escape(raw)}"]`),
+  ]).forEach((el) => {
+    const ppm = pxPerMinuteFor(el);
+    if (!ppm) return; // month view / all-day row
+    el.style.transform = `translateY(${deltaMin * ppm}px)`;
+    els.push(el);
+  });
   watchAndClear(els);
 }
 
@@ -661,7 +680,7 @@ function collectGroupEls(chip, groupRaws) {
       .forEach((el) => els.add(el));
   }
   els.add(chip.el);
-  return [...els];
+  return outermostOnly([...els]);
 }
 
 /** Which part of the chip was grabbed: "start" (top edge), "end" (bottom edge), or "move". */
