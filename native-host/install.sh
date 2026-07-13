@@ -107,6 +107,14 @@ echo "Done. Extension ID: $EXT_ID"
 echo "Reload the extension once (chrome://extensions → ↻), then the"
 echo "'Update now' button in the popup will work."
 echo
-echo "If updates fail with a folder-permission error: System Settings →"
-echo "Privacy & Security → Files & Folders → your browser → allow"
-echo "'Documents Folder' (the repo lives in $REPO)."
+case "$REPO" in
+  "$HOME/Documents/"*|"$HOME/Desktop/"*|"$HOME/Downloads/"*)
+    echo "NOTE: the repo lives in a macOS-protected folder ($REPO)."
+    echo "Chromium launches update helpers with the browser's permissions"
+    echo "stripped (TCC 'disclaim'), so granting the browser folder access or"
+    echo "Full Disk Access will NOT make updates work. If 'Update now' fails"
+    echo "with a permission error, move this folder outside Documents/Desktop/"
+    echo "Downloads (e.g. ~/GitHub), re-run this installer, and reload the"
+    echo "extension from the new path (the extension ID stays the same)."
+    ;;
+esac

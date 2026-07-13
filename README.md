@@ -157,12 +157,18 @@ inside this folder and refuses to touch uncommitted local changes.
 
 The helper is installed to `~/Library/Application Support/GCalPrecisionMover`
 (macOS) rather than run from inside this folder: macOS treats Documents,
-Desktop and Downloads as permission-gated, and a browser without that grant
-kills a host script placed there before it can even reply ("Native host has
-exited"). If "Update now" reports a folder-permission error, allow
-**Documents Folder** for your browser under System Settings → Privacy &
-Security → Files & Folders. If you saw "Native host has exited" with an older
-install, just re-run `bash native-host/install.sh` once.
+Desktop and Downloads as permission-gated (TCC), and Chromium deliberately
+launches native messaging hosts with the browser's permissions stripped
+([disclaimed TCC responsibility](https://source.chromium.org/chromium/chromium/src/+/main:base/process/launch_mac.cc)),
+so the helper runs as plain `bash`/`python3`/`git` with no folder access of
+its own. Granting your browser **Documents Folder** access — or even Full
+Disk Access — does **not** carry over to the helper. If "Update now" reports
+a folder-permission error, the reliable fix is to keep this repo **outside**
+Documents/Desktop/Downloads (e.g. `~/GitHub`): move the folder, re-run
+`bash native-host/install.sh`, and reload the unpacked extension from the new
+path (the extension ID is pinned in the manifest, so it stays the same). If
+you saw "Native host has exited" with an older install, re-run
+`bash native-host/install.sh` once.
 
 To remove it: `bash native-host/install.sh --uninstall`.
 

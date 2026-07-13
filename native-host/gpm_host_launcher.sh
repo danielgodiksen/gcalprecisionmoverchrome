@@ -9,11 +9,14 @@
 #
 # install.sh COPIES this launcher (plus gpm_native_host.py and a generated
 # gpm_host.conf holding the repo path) into a folder outside ~/Documents.
-# That matters on macOS: Documents/Desktop/Downloads are TCC-protected, and a
-# browser without the "Documents Folder" permission can't even read a script
-# there — the host dies before line 1 and Chrome shows "Native host has
-# exited." Running from ~/Library sidesteps that; only the git commands then
-# need Documents access, and the host reports THOSE failures with a fix hint.
+# That matters on macOS: Documents/Desktop/Downloads are TCC-protected, and
+# Chromium launches native hosts with the browser's TCC permissions stripped
+# (disclaimed responsibility chain), so this process runs as bare bash/python
+# with no folder access — regardless of what the browser itself was granted.
+# A host script inside a protected folder dies before line 1 and Chrome shows
+# "Native host has exited." Running from ~/Library sidesteps that; only the
+# git commands then touch the repo, and the host reports THOSE failures with
+# a fix hint (move the repo outside the protected folders).
 #
 # Every launch logs a breadcrumb to /tmp/gpm-native-host.log for debugging,
 # and launcher-level failures are sent back to the browser as a real native
@@ -30,8 +33,12 @@ export GPM_REPO="${GPM_REPO:-$(dirname "$DIR")}"
 
 # Prefer the repo's host script when we can read it, so a `git pull` updates
 # the helper too; the installed snapshot is the fallback that always starts.
+# The probe must actually open the file: `[ -r ]` uses access(2), which macOS
+# TCC does not intercept, so it reports a Documents-folder script as readable
+# even when the browser's open(2) of it would get EPERM — python would then
+# die before the host could reply.
 REPO_HOST="$GPM_REPO/native-host/gpm_native_host.py"
-[ "$REPO_HOST" != "$HOST" ] && [ -r "$REPO_HOST" ] && HOST="$REPO_HOST"
+[ "$REPO_HOST" != "$HOST" ] && head -c1 "$REPO_HOST" >/dev/null 2>&1 && HOST="$REPO_HOST"
 
 log() { echo "[$(date)] $*" >> "$LOG"; }
 

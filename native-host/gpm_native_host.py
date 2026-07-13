@@ -28,13 +28,17 @@ import sys
 REPO = os.environ.get("GPM_REPO") or os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))
 
-# macOS TCC: Documents/Desktop/Downloads are permission-gated per app. The
-# browser (not the user's shell) is the process charged for our git commands,
-# so git fails with EPERM until the browser is granted folder access.
+# macOS TCC: Documents/Desktop/Downloads are permission-gated per app, and
+# Chromium launches native hosts with a DISCLAIMED responsibility chain
+# (responsibility_spawnattrs_setdisclaim), so this process is judged as bare
+# bash/python/git with no permissions of its own — the browser's own folder
+# grants and even Full Disk Access do NOT apply here. The only reliable fix
+# is keeping the repo outside the protected folders.
 _PERM_HINT = (
-    "  The browser likely lacks access to the extension folder: open "
-    "System Settings > Privacy & Security > Files & Folders, allow "
-    "'Documents Folder' for your browser, then try again."
+    "  macOS blocks the update helper from this folder (the browser's own "
+    "folder permissions don't extend to it). Move the extension folder "
+    "somewhere outside Documents/Desktop/Downloads (e.g. ~/GitHub), re-run "
+    "native-host/install.sh, and reload the extension from the new path."
 )
 
 
