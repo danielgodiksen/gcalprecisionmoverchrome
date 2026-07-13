@@ -39,8 +39,8 @@
   right: 20px;
   bottom: 20px;
   z-index: 2147483646;
-  width: 232px;
-  padding: 12px 14px;
+  width: 240px;
+  padding: 14px 16px;
   border-radius: 12px;
   background: #ffffff;
   color: #3c4043;
@@ -77,11 +77,12 @@
 .gpm-panel__row--fields input {
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 6px;
+  padding: 5px 6px;
   border: 1px solid #dadce0;
   border-radius: 6px;
   font: inherit;
   color: #202124;
+  text-align: center;
 }
 .gpm-panel__row--fields input:focus {
   outline: 2px solid #1a73e8;
@@ -93,6 +94,7 @@
   background: #fff;
   color: #3c4043;
   border-radius: 6px;
+  min-height: 28px;
   padding: 4px 8px;
   font: 500 12px Roboto, Arial, sans-serif;
   cursor: pointer;
@@ -122,18 +124,26 @@
 .gpm-btn--ghost:hover {
   background: #e8f0fe;
 }
-
-.gpm-panel__nudge {
-  justify-content: space-between;
+.gpm-btn--bell {
+  flex: none;
+  width: 34px;
+  padding: 4px 0;
+  text-align: center;
 }
+
 .gpm-panel__nudge span {
   font-size: 11px;
   color: #5f6368;
 }
+.gpm-panel__nudge button {
+  flex: 1;
+  padding: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
 
 .gpm-panel__hint {
-  font-size: 10.5px;
-  color: #80868b;
+  font-size: 11px;
+  color: #5f6368;
   margin-bottom: 0;
 }
 

@@ -171,26 +171,31 @@ function renderPanel() {
   if (!panel) {
     panel = document.createElement("div");
     panel.className = "gpm-panel";
+    panel.setAttribute("role", "region");
+    panel.setAttribute("aria-label", "Precision Mover — shift selected events");
     panel.innerHTML = `
       <div class="gpm-panel__head">
-        <span class="gpm-panel__count"></span>
+        <span class="gpm-panel__count" aria-live="polite"></span>
         <button class="gpm-btn gpm-btn--ghost" data-act="clear" title="Clear selection (Esc)">Clear</button>
       </div>
-      <div class="gpm-panel__row gpm-panel__row--fields">
-        <label>Days <input type="number" step="1" value="0" data-f="d"></label>
-        <label>Hours <input type="number" step="1" value="0" data-f="h"></label>
-        <label>Min <input type="number" step="1" value="0" data-f="m"></label>
+      <div class="gpm-panel__row gpm-panel__row--fields"
+           title="Positive values move events later, negative earlier">
+        <label>Days <input type="number" step="1" value="0" data-f="d" aria-label="Days"></label>
+        <label>Hours <input type="number" step="1" value="0" data-f="h" aria-label="Hours"></label>
+        <label>Mins <input type="number" step="1" value="0" data-f="m" aria-label="Minutes"></label>
       </div>
       <div class="gpm-panel__row">
-        <button class="gpm-btn gpm-btn--primary" data-act="apply">Shift selected</button>
-        <button class="gpm-btn" data-act="reminders" title="Notification reminders for selected events">🔔</button>
+        <button class="gpm-btn gpm-btn--primary" data-act="apply"
+                title="Positive values move events later, negative earlier">Shift selected</button>
+        <button class="gpm-btn gpm-btn--bell" data-act="reminders" aria-label="Reminders"
+                title="Notification reminders for selected events">🔔</button>
       </div>
-      <div class="gpm-panel__row gpm-panel__nudge">
-        <span>Nudge</span>
-        <button class="gpm-btn" data-nudge="-5">−5m</button>
-        <button class="gpm-btn" data-nudge="-1">−1m</button>
-        <button class="gpm-btn" data-nudge="1">+1m</button>
-        <button class="gpm-btn" data-nudge="5">+5m</button>
+      <div class="gpm-panel__row gpm-panel__nudge" role="group" aria-label="Nudge selection">
+        <span aria-hidden="true">Nudge</span>
+        <button class="gpm-btn" data-nudge="-5" aria-label="5 minutes earlier">−5m</button>
+        <button class="gpm-btn" data-nudge="-1" aria-label="1 minute earlier">−1m</button>
+        <button class="gpm-btn" data-nudge="1" aria-label="1 minute later">+1m</button>
+        <button class="gpm-btn" data-nudge="5" aria-label="5 minutes later">+5m</button>
       </div>
       <div class="gpm-panel__hint">Alt+drag a selected event to move the whole selection · Alt+↑/↓ nudges 1 min</div>
     `;

@@ -91,9 +91,25 @@
       font: inherit;
       font-weight: 400;
     }
-    .field input:focus { outline: none; border-color: #8ab4f8; }
-    .field-pair { display: flex; gap: 8px; }
-    .field-pair .field { flex: 1; }
+    .field input:focus {
+      outline: none;
+      border-color: #8ab4f8;
+      box-shadow: 0 0 0 1px #8ab4f8;
+    }
+    .help {
+      font-size: 11px;
+      font-weight: 400;
+      color: #9aa0a6;
+      margin-top: 3px;
+    }
+    .field--sub { margin-left: 24px; }
+    .field--sub.disabled { opacity: 0.5; }
+    .field--sub.disabled input { cursor: default; }
+    button:focus-visible,
+    .toggle input:focus-visible {
+      outline: 2px solid #8ab4f8;
+      outline-offset: 1px;
+    }
     #saved {
       margin-top: 8px;
       font-size: 11.5px;
@@ -165,23 +181,23 @@
 
   <h2>Defaults for new reminders</h2>
   <div class="field">
-    <label for="s-leads">Alert before start (minutes, comma-separated; 0 = at start)</label>
-    <input type="text" id="s-leads" placeholder="5,0" />
+    <label for="s-leads">Alert before start</label>
+    <input type="text" id="s-leads" placeholder="5,0" aria-describedby="leads-help" />
+    <div class="help" id="leads-help">Minutes before the event, comma-separated · 0 = at start</div>
   </div>
-  <div class="field-pair">
-    <div class="field">
-      <label for="s-focus">Focus ping every N min (0 = off)</label>
-      <input type="number" id="s-focus" min="0" step="5" />
-    </div>
-    <div class="field">
-      <label for="s-fumin">Follow-up length (min)</label>
-      <input type="number" id="s-fumin" min="5" step="5" />
-    </div>
+  <div class="field">
+    <label for="s-focus">Focus ping interval (minutes)</label>
+    <input type="number" id="s-focus" min="0" step="5" aria-describedby="focus-help" />
+    <div class="help" id="focus-help">Repeats while the event is running · 0 = off</div>
   </div>
   <label class="toggle">
     <input type="checkbox" id="s-fu" />
     Prompt for a follow-up when events end
   </label>
+  <div class="field field--sub" id="fumin-field">
+    <label for="s-fumin">Follow-up length (minutes)</label>
+    <input type="number" id="s-fumin" min="5" step="5" />
+  </div>
   <div id="saved">Saved ✓</div>
 
   <h2>Setup</h2>

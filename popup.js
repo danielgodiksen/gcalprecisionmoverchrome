@@ -251,6 +251,14 @@ function fillForm(s) {
   $("s-fu").checked = s.defFollowUp;
   $("s-fumin").value = s.defFollowUpMin;
   $("s-backdrop").checked = s.dialogBackdropClose;
+  syncFollowUpField();
+}
+
+// The follow-up length only applies while the follow-up prompt is on.
+function syncFollowUpField() {
+  const on = $("s-fu").checked;
+  $("s-fumin").disabled = !on;
+  $("fumin-field").classList.toggle("disabled", !on);
 }
 
 let savedTimer = null;
@@ -267,6 +275,7 @@ async function saveSettings() {
   for (const id of ["s-sound", "s-upd-notify", "s-upd-banner", "s-fu", "s-backdrop"]) {
     $(id).addEventListener("change", saveSettings);
   }
+  $("s-fu").addEventListener("change", syncFollowUpField);
   for (const id of ["s-leads", "s-focus", "s-fumin"]) {
     $(id).addEventListener("change", saveSettings);
   }
